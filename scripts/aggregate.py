@@ -40,6 +40,11 @@ SOURCES = (
     Source("g4media", "G4Media", "g4media.ro", ("https://www.g4media.ro/feed",)),
     Source("mediafax", "Mediafax", "mediafax.ro", ("https://www.mediafax.ro/rss", "https://www.mediafax.ro/feed")),
     Source("digi24", "Digi24", "digi24.ro", ("https://www.digi24.ro/rss",), paginated=False),
+    Source("descopera", "Descoperă", "descopera.ro", ("https://www.descopera.ro/feed", "https://www.descopera.ro/rss")),
+    Source("biziday", "Biziday", "biziday.ro", ("https://www.biziday.ro/feed",)),
+    Source("zonait", "Zona IT", "zonait.ro", ("https://zonait.ro/feed",)),
+    Source("go4it", "Go4it", "go4it.ro", ("https://www.go4it.ro/feed", "https://www.go4it.ro/rss")),
+    Source("playtech", "Playtech", "playtech.ro", ("https://playtech.ro/feed",)),
 )
 
 

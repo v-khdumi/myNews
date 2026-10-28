@@ -200,6 +200,22 @@ class PreviewTests(unittest.TestCase):
 
 
 class CollectionTests(unittest.TestCase):
+    def test_all_nine_publishers_are_configured_and_collected(self):
+        self.assertEqual({source.id for source in SOURCES}, {
+            "hotnews", "g4media", "mediafax", "digi24", "descopera",
+            "biziday", "zonait", "go4it", "playtech",
+        })
+        for source in SOURCES:
+            with self.subTest(source=source.id):
+                for feed in source.feeds:
+                    self.assertIsNotNone(publisher_url(feed, source))
+                articles, status = collect_source(source, NOW, lambda url, selected: rss([
+                    item(1, domain=selected.domain), item(25, slug="old", domain=selected.domain),
+                ]))
+                self.assertEqual(len(articles), 1)
+                self.assertEqual(articles[0]["source"], source.id)
+                self.assertEqual(status["status"], "ok")
+
     def test_exact_24_hour_window_no_future_or_old(self):
         body = rss([item(0, slug="now"), item(24, slug="boundary"),
                     item(24.001, slug="old"), item(-0.001, slug="future")])
@@ -223,7 +239,7 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(status["status"], "ok")
 
     def test_follows_explicit_next_even_for_non_paginated_source(self):
-        source = SOURCES[-1]
+        source = next(source for source in SOURCES if source.id == "digi24")
         pages = [
             rss([item(1, domain=source.domain)], next_url="https://www.digi24.ro/rss?cursor=2"),
             rss([item(25, domain=source.domain, slug="old")]),
@@ -276,7 +292,7 @@ class CollectionTests(unittest.TestCase):
         self.assertIn("limita", status["error"])
 
     def test_non_paginated_feed_reports_limited_coverage(self):
-        source = SOURCES[-1]
+        source = next(source for source in SOURCES if source.id == "digi24")
         _, status = collect_source(source, NOW, lambda *_: rss([item(domain=source.domain)]))
         self.assertEqual(status["status"], "partial")
 
@@ -322,10 +338,10 @@ class AggregationTests(unittest.TestCase):
                         item(25, domain=source.domain)])
 
         data = aggregate(NOW, previous, fetch)
-        self.assertEqual(len(data["articles"]), 5)
+        self.assertEqual(len(data["articles"]), len(SOURCES) + 1)
         fresh = next(article for article in data["articles"] if article["url"] == "https://hotnews.ro/fresh")
         self.assertEqual(fresh["title"], "Titlu actualizat")
-        self.assertEqual(len(data["sources"]), 4)
+        self.assertEqual(len(data["sources"]), len(SOURCES))
         self.assertTrue(all(source["status"] == "ok" for source in data["sources"]))
 
     def test_partial_source_failure_does_not_hide_healthy_sources(self):
@@ -336,7 +352,7 @@ class AggregationTests(unittest.TestCase):
 
         with self.assertLogs("mynews"):
             data = aggregate(NOW, fetcher=fetch)
-        self.assertEqual(len(data["articles"]), 3)
+        self.assertEqual(len(data["articles"]), len(SOURCES) - 1)
         self.assertEqual(data["sources"][2]["status"], "error")
 
     def test_cached_preview_metadata_survives_outage(self):

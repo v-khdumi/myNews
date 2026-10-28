@@ -1,0 +1,11 @@
+{
+  "generated_at": null,
+  "window_hours": 24,
+  "sources": [
+    { "id": "hotnews", "status": "pending", "last_success_at": null, "error": null },
+    { "id": "g4media", "status": "pending", "last_success_at": null, "error": null },
+    { "id": "mediafax", "status": "pending", "last_success_at": null, "error": null },
+    { "id": "digi24", "status": "pending", "last_success_at": null, "error": null }
+  ],
+  "articles": []
+}

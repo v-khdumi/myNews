@@ -14,9 +14,8 @@
     document.querySelector('meta[name="theme-color"]').content = theme === "night" ? "#0c1015" : "#f4f6f8";
     const button = document.querySelector("#theme-toggle");
     if (!button) return;
-    button.textContent = theme === "night" ? "Noapte" : "Zi";
-    button.setAttribute("aria-pressed", String(theme === "night"));
-    button.title = theme === "night" ? "Activează modul zi" : "Activează modul noapte";
+    button.setAttribute("aria-checked", String(theme === "night"));
+    button.title = theme === "night" ? "Tema Noapte este activă. Comută la Zi." : "Tema Zi este activă. Comută la Noapte.";
   }
 
   applyTheme();

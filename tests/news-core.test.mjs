@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { currentArticles, DAY_MS, normalizeSearch, relativeTime, safeImageUrl, selectArticles, validArticle } from "../news-core.mjs";
+import { currentArticles, DAY_MS, normalizeSearch, relativeTime, safeImageUrl, selectArticles, SOURCES, validArticle, validateEdition } from "../news-core.mjs";
 
 const now = Date.parse("2026-10-28T22:30:00Z");
 function article(hours, overrides = {}) {
@@ -73,4 +73,48 @@ test("old editions without image and excerpt fields remain compatible", () => {
   assert.equal(validArticle(article(1)), true);
   assert.equal(currentArticles([article(1)], now).length, 1);
   assert.equal(safeImageUrl(article(1).image_url), null);
+});
+
+test("all nine sources accept their own links and are individually filterable", () => {
+  assert.deepEqual(SOURCES.map((source) => source.id), [
+    "hotnews", "g4media", "mediafax", "digi24", "descopera", "biziday", "zonait", "go4it", "playtech",
+  ]);
+  const articles = SOURCES.map((source) => article(1, {
+    source: source.id, url: `${source.homepage}/article`,
+  }));
+  for (const source of SOURCES) {
+    const result = selectArticles(articles, { source: source.id, now });
+    assert.equal(result.length, 1);
+    assert.equal(result[0].source, source.id);
+    assert.equal(validArticle(article(1, { source: source.id, url: "https://unrelated.example/article" })), false);
+  }
+});
+
+test("old four-source editions retain news and show new sources as pending", () => {
+  const old = {
+    generated_at: new Date(now).toISOString(),
+    articles: [article(1)],
+    sources: SOURCES.slice(0, 4).map(({ id }) => ({ id, status: "ok" })),
+  };
+  const edition = validateEdition(old);
+  assert.equal(edition.sources.length, 9);
+  assert.equal(edition.sources.filter(({ status }) => status === "pending").length, 5);
+  assert.deepEqual(edition.articles, old.articles);
+  assert.equal(old.sources.length, 4);
+});
+
+test("invalid editions still fail explicitly", () => {
+  const base = {
+    generated_at: null, articles: [], sources: SOURCES.map(({ id }) => ({ id, status: "pending" })),
+  };
+  assert.equal(validateEdition(base).sources.length, 9);
+  for (const overrides of [
+    { sources: [] }, { sources: [null] },
+    { sources: [{ id: "hotnews", status: "ok" }, { id: "hotnews", status: "ok" }] },
+    { sources: [{ id: "unknown", status: "ok" }] },
+    { sources: [{ id: "hotnews", status: "wrong" }] },
+    { articles: [article(1, { url: "javascript:alert(1)" })] }, { generated_at: "invalid" },
+  ]) {
+    assert.throws(() => validateEdition({ ...base, ...overrides }), /Formatul ediției/);
+  }
 });

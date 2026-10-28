@@ -1,4 +1,4 @@
-import { currentArticles, relativeTime, safeImageUrl, selectArticles, SOURCES, validArticle } from "./news-core.mjs";
+import { currentArticles, relativeTime, safeImageUrl, selectArticles, SOURCES, validateEdition } from "./news-core.mjs";
 
 const $ = (selector) => document.querySelector(selector);
 const pageSize = 24;
@@ -198,18 +198,6 @@ function render() {
   renderSources();
 }
 
-function validateData(data) {
-  const statuses = new Set(["ok", "partial", "error", "pending"]);
-  if (!data || !Array.isArray(data.articles) || !Array.isArray(data.sources)
-    || data.sources.length !== SOURCES.length
-    || !SOURCES.every((source) => data.sources.some((entry) => entry.id === source.id && statuses.has(entry.status)))
-    || !data.articles.every(validArticle)
-    || (data.generated_at !== null && (typeof data.generated_at !== "string" || !Number.isFinite(Date.parse(data.generated_at))))) {
-    throw new Error("Formatul ediției nu este valid.");
-  }
-  return data;
-}
-
 async function loadNews() {
   if (state.loading) return;
   state.loading = true;
@@ -220,7 +208,7 @@ async function loadNews() {
       signal: AbortSignal.timeout(20000),
     });
     if (!response.ok) throw new Error(`Serverul a răspuns cu HTTP ${response.status}.`);
-    state.data = validateData(await response.json());
+    state.data = validateEdition(await response.json());
     state.error = "";
   } catch (error) {
     console.error("Încărcarea știrilor a eșuat:", error);
@@ -231,13 +219,26 @@ async function loadNews() {
   }
 }
 
-document.querySelectorAll("[data-source]").forEach((button) => {
+for (const source of [{ id: "all", name: "Toate" }, ...SOURCES]) {
+  const button = element("button", `source-filter ${source.id}`);
+  button.type = "button";
+  button.dataset.source = source.id;
+  button.setAttribute("aria-pressed", String(source.id === state.source));
+  if (source.id !== "all") {
+    const dot = element("span", "source-dot");
+    dot.setAttribute("aria-hidden", "true");
+    button.append(dot);
+  }
+  const count = element("span", "filter-count", "0");
+  count.dataset.count = source.id;
+  button.append(source.name, count);
   button.addEventListener("click", () => {
-    state.source = button.dataset.source;
+    state.source = source.id;
     state.limit = pageSize;
     render();
   });
-});
+  $(".source-filters").append(button);
+}
 $("#search").addEventListener("input", (event) => {
   state.query = event.target.value;
   state.limit = pageSize;

@@ -4,7 +4,29 @@ export const SOURCES = [
   { id: "g4media", name: "G4Media", domain: "g4media.ro", homepage: "https://www.g4media.ro" },
   { id: "mediafax", name: "Mediafax", domain: "mediafax.ro", homepage: "https://www.mediafax.ro" },
   { id: "digi24", name: "Digi24", domain: "digi24.ro", homepage: "https://www.digi24.ro" },
+  { id: "descopera", name: "Descoperă", domain: "descopera.ro", homepage: "https://www.descopera.ro" },
+  { id: "biziday", name: "Biziday", domain: "biziday.ro", homepage: "https://www.biziday.ro" },
+  { id: "zonait", name: "Zona IT", domain: "zonait.ro", homepage: "https://zonait.ro" },
+  { id: "go4it", name: "Go4it", domain: "go4it.ro", homepage: "https://www.go4it.ro" },
+  { id: "playtech", name: "Playtech", domain: "playtech.ro", homepage: "https://playtech.ro" },
 ];
+
+export function validateEdition(data) {
+  const statuses = new Set(["ok", "partial", "error", "pending"]);
+  if (!data || !Array.isArray(data.articles) || !Array.isArray(data.sources)
+    || data.sources.length === 0
+    || new Set(data.sources.map((entry) => entry?.id)).size !== data.sources.length
+    || !data.sources.every((entry) => entry && SOURCES.some((source) => source.id === entry.id) && statuses.has(entry.status))
+    || !data.articles.every(validArticle)
+    || (data.generated_at !== null && (typeof data.generated_at !== "string" || !Number.isFinite(Date.parse(data.generated_at))))) {
+    throw new Error("Formatul ediției nu este valid.");
+  }
+  return {
+    ...data,
+    sources: SOURCES.map((source) => data.sources.find((entry) => entry.id === source.id)
+      ?? { id: source.id, status: "pending", last_success_at: null, error: null }),
+  };
+}
 
 export function safeImageUrl(value) {
   if (typeof value !== "string" || !value) return null;

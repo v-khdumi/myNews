@@ -1,12 +1,13 @@
 <!doctype html>
-<html lang="ro">
+<html lang="ro" data-theme="night">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f6f7fb">
-    <meta name="description" content="Știrile ultimelor 24 de ore de la HotNews, G4Media, Mediafax și Digi24, într-un singur loc.">
+    <meta name="theme-color" content="#0c1015">
+    <meta name="description" content="Știrile ultimelor 24 de ore din nouă surse de actualitate, știință și tehnologie, într-un singur loc.">
     <title>myNews — Știrile ultimelor 24 de ore</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <script src="theme.js"></script>
     <link rel="stylesheet" href="styles.css">
     <script type="module" src="app.mjs"></script>
   </head>
@@ -17,29 +18,20 @@
         <span class="brand-icon" aria-hidden="true">m<span>n</span></span>
         my<span>News</span>
       </a>
-      <span class="header-note">Presa de azi. Într-un singur loc.</span>
-      <span class="edition">EDIȚIA TA ZILNICĂ</span>
+      <span class="edition">ULTIMELE 24H</span>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Mod noapte" aria-pressed="true" disabled>Noapte</button>
     </header>
 
     <main>
-      <section class="intro" aria-labelledby="page-title">
-        <div class="eyebrow"><span class="live-dot" aria-hidden="true"></span> PATRU SURSE. O SINGURĂ PERSPECTIVĂ DE ANSAMBLU.</div>
-        <h1 id="page-title">Ce se întâmplă.<br><span>În ultimele 24 de ore.</span></h1>
-        <p>Știrile de la HotNews, G4Media, Mediafax și Digi24, adunate la un loc.<br class="desktop-break"> Tu alegi ce citești. Direct de la sursă.</p>
+      <h1 class="sr-only">Știrile ultimelor 24 de ore</h1>
         <div class="update-row">
           <span id="update-status" role="status">Se încarcă știrile…</span>
           <button id="refresh" class="refresh-button" type="button" disabled><span aria-hidden="true">↻</span> Reîncarcă</button>
         </div>
-      </section>
 
       <section class="news-panel" aria-label="Știri și filtre">
         <div class="toolbar">
           <div class="source-filters" role="group" aria-label="Filtrează după sursă">
-            <button type="button" class="source-filter active" data-source="all" aria-pressed="true">Toate sursele <span class="filter-count" data-count="all">0</span></button>
-            <button type="button" class="source-filter" data-source="hotnews" aria-pressed="false"><span class="source-dot hotnews" aria-hidden="true"></span>HotNews <span class="filter-count" data-count="hotnews">0</span></button>
-            <button type="button" class="source-filter" data-source="g4media" aria-pressed="false"><span class="source-dot g4media" aria-hidden="true"></span>G4Media <span class="filter-count" data-count="g4media">0</span></button>
-            <button type="button" class="source-filter" data-source="mediafax" aria-pressed="false"><span class="source-dot mediafax" aria-hidden="true"></span>Mediafax <span class="filter-count" data-count="mediafax">0</span></button>
-            <button type="button" class="source-filter" data-source="digi24" aria-pressed="false"><span class="source-dot digi24" aria-hidden="true"></span>Digi24 <span class="filter-count" data-count="digi24">0</span></button>
           </div>
           <label class="search-box">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
@@ -67,15 +59,11 @@
         <div class="load-more-row"><button id="load-more" class="load-more" type="button" hidden>Mai multe știri <span aria-hidden="true">↓</span></button></div>
       </section>
 
-      <section class="about-strip" aria-label="Despre agregator">
-        <span class="about-icon" aria-hidden="true">↗</span>
-        <div><h2>Jurnalismul aparține celor care îl fac.</h2><p>Aici vezi titlurile, imaginile și scurte extrase din RSS. Articolele integrale se citesc la sursa originală.</p></div>
-        <span class="window-label">24h <span>fereastră mobilă</span></span>
-      </section>
       <details class="source-details">
         <summary>Surse și starea actualizării</summary>
         <ul id="source-status"></ul>
         <p>Actualizare programată la fiecare 30 de minute; GitHub poate întârzia rulările. Sunt afișate doar articole cu data publicării în ultimele 24 de ore, disponibile în fluxurile RSS. Unele fluxuri pot limita numărul de articole.</p>
+        <p>Aici vezi titlurile, imaginile și scurte extrase din RSS. Articolele integrale și drepturile asupra materialelor aparțin publicațiilor originale.</p>
       </details>
     </main>
     <dialog id="article-reader" class="article-reader" aria-labelledby="reader-title" aria-describedby="reader-note">
@@ -92,7 +80,7 @@
         <a id="reader-source" class="reader-source" target="_blank" rel="noopener noreferrer"></a>
       </article>
     </dialog>
-    <footer><a class="footer-brand" href="./">myNews<span>.</span></a><span>Mai puțin zgomot. Mai multă informație.</span><span>Ora afișată: România · Europe/Bucharest</span></footer>
+    <footer><a class="footer-brand" href="./">myNews<span>.</span></a><span>9 surse · fereastră mobilă de 24h</span><span>Ora României · Europe/Bucharest</span></footer>
     <noscript><p class="noscript">Activează JavaScript pentru a vedea și filtra știrile agregate.</p></noscript>
   </body>
 </html>

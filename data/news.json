@@ -5,7 +5,12 @@
     { "id": "hotnews", "status": "pending", "last_success_at": null, "error": null },
     { "id": "g4media", "status": "pending", "last_success_at": null, "error": null },
     { "id": "mediafax", "status": "pending", "last_success_at": null, "error": null },
-    { "id": "digi24", "status": "pending", "last_success_at": null, "error": null }
+    { "id": "digi24", "status": "pending", "last_success_at": null, "error": null },
+    { "id": "descopera", "status": "pending", "last_success_at": null, "error": null },
+    { "id": "biziday", "status": "pending", "last_success_at": null, "error": null },
+    { "id": "zonait", "status": "pending", "last_success_at": null, "error": null },
+    { "id": "go4it", "status": "pending", "last_success_at": null, "error": null },
+    { "id": "playtech", "status": "pending", "last_success_at": null, "error": null }
   ],
   "articles": []
 }

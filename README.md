@@ -1,8 +1,14 @@
 # myNews
 
-O singură pagină cu titlurile știrilor din ultimele **24 de ore** de la **HotNews, G4Media, Mediafax și Digi24**, cu linkuri către articolele originale.
+O singură pagină cu titlurile știrilor din ultimele **24 de ore** de la **HotNews, G4Media, Mediafax, Digi24, Descoperă, Biziday, Zona IT, Go4it și Playtech**, cu linkuri către articolele originale.
 
 Interfață în română, cu listă compactă pe telefon, filtre pe surse, căutare fără diacritice, sortare și ore afișate în fusul `Europe/Bucharest`. La apăsarea cardului, titlului sau imaginii se deschide o previzualizare în pagină, cu sursa, data, imaginea disponibilă și un scurt extras RSS. Butonul „Citește la sursă” deschide direct articolul original.
+
+## Afișare compactă și contrast
+
+Fără introducere mare: pagina începe direct cu actualizarea, filtrele și știrile. Cardurile folosesc miniaturi laterale, cu o coloană pe telefon și până la patru pe desktop. Toate sursele sunt accesibile prin filtre derulabile orizontal pe ecrane mici.
+
+Tema **noapte este implicită**, indiferent de tema sistemului. Butonul **Noapte / Zi** din antet schimbă paleta întregii pagini, inclusiv previzualizarea, câmpurile și avertismentele. Preferința este salvată în `localStorage` și aplicată înaintea stilurilor pentru a evita afișarea temporară a altei teme. Dacă stocarea este blocată, comutatorul funcționează în continuare în pagina curentă, iar problema este raportată în consolă.
 
 ## Imagini și previzualizare
 
@@ -26,7 +32,7 @@ Activarea Pages și, dacă este cazul, schimbarea vizibilității necesită drep
 - GitHub Actions preia RSS-urile la minutele **07 și 37** ale fiecărei ore. Rulările programate pot întârzia; nu este o actualizare în timp real. În repository-uri publice fără activitate timp de 60 de zile, GitHub poate dezactiva programarea; reactiveaz-o din Actions.
 - Browserul reîncarcă ediția publicată la fiecare 5 minute și elimină știrile expirate în fiecare minut, chiar dacă pagina rămâne deschisă. „Reîncarcă” citește ediția publicată, nu declanșează preluarea RSS.
 - Atât agregatorul, cât și pagina filtrează după **data publicării**, între momentul curent minus 24 de ore și momentul curent. Articolele fără dată validă sau cu dată în viitor nu sunt afișate.
-- Sunt folosite fluxurile publicațiilor: HotNews `/feed` (alternativ `/rss`), G4Media `/feed`, Mediafax `/rss` (alternativ `/feed`), Digi24 `/rss`. Pentru fluxurile WordPress se încearcă paginarea `?paged=N`; sunt urmate și linkurile RSS/Atom `rel="next"`. Există o limită de 40 de pagini pe sursă și rulare.
+- Sunt folosite fluxurile publicațiilor: HotNews `/feed` (alternativ `/rss`), G4Media `/feed`, Mediafax `/rss` (alternativ `/feed`), Digi24 `/rss`, Descoperă `/feed` (alternativ `/rss`), Biziday `/feed`, Zona IT `/feed`, Go4it `/feed` (alternativ `/rss`) și Playtech `/feed`. Pentru fluxurile WordPress se încearcă paginarea `?paged=N`; sunt urmate și linkurile RSS/Atom `rel="next"`. Există o limită de 40 de pagini pe sursă și rulare.
 - Acoperirea depinde de fluxurile publicate, de suportul pentru paginare și de disponibilitatea publicațiilor; nu poate fi garantat că fiecare articol de pe site-uri apare în RSS. Interfața semnalează sursele indisponibile și fluxurile cu acoperire limitată.
 - Ediția precedentă este păstrată în cache-ul Actions. Articolele încă recente sunt păstrate chiar dacă dispar din RSS sau o sursă nu răspunde. Cache-ul poate fi eliminat de GitHub, deci nu este o arhivă permanentă.
 - Dacă toate sursele eșuează și nu există știri recente în cache, publicarea este oprită pentru a nu înlocui ediția existentă cu una goală. Interfața existentă avertizează când ediția este veche și nu afișează articole mai vechi de 24 de ore.
@@ -43,4 +49,4 @@ python scripts/aggregate.py --previous data/news.json --output data/news.json
 python -m http.server 8000
 ```
 
-Deschide `http://localhost:8000`. Fără rularea agregatorului, pagina afișează explicit starea „Prima ediție este în pregătire”, nu știri fictive. Preluarea efectivă necesită acces la internet și DNS funcțional pentru cele patru publicații.
+Deschide `http://localhost:8000`. Fără rularea agregatorului, pagina afișează explicit starea „Prima ediție este în pregătire”, nu știri fictive. Preluarea efectivă necesită acces la internet și DNS funcțional pentru cele nouă publicații. Edițiile anterioare cu mai puține surse rămân compatibile; noile surse apar ca fiind în așteptarea primei actualizări.

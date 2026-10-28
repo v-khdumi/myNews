@@ -43,7 +43,7 @@ jobs:
       - name: Construiește pagina și preia știrile
         run: |
           mkdir -p _site/data .cache
-          cp index.html styles.css app.mjs news-core.mjs favicon.svg _site/
+          cp index.html styles.css theme.js app.mjs news-core.mjs favicon.svg _site/
           touch _site/.nojekyll
           python scripts/aggregate.py --previous .cache/news.json --output _site/data/news.json
           cp _site/data/news.json .cache/news.json

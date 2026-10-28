@@ -8,7 +8,7 @@ Interfață în română, cu listă compactă pe telefon, filtre pe surse, căut
 
 Fără introducere mare: pagina începe direct cu actualizarea, filtrele și știrile. Cardurile folosesc miniaturi laterale, cu o coloană pe telefon și până la patru pe desktop. Toate sursele sunt accesibile prin filtre derulabile orizontal pe ecrane mici.
 
-Tema **noapte este implicită**, indiferent de tema sistemului. Butonul **Noapte / Zi** din antet schimbă paleta întregii pagini, inclusiv previzualizarea, câmpurile și avertismentele. Preferința este salvată în `localStorage` și aplicată înaintea stilurilor pentru a evita afișarea temporară a altei teme. Dacă stocarea este blocată, comutatorul funcționează în continuare în pagina curentă, iar problema este raportată în consolă.
+Tema **noapte este implicită**, indiferent de tema sistemului. Toggle-ul **Zi / Noapte** din antet are ambele etichete, pictograme soare/lună și un cursor glisant care indică tema activă. Schimbă paleta întregii pagini, inclusiv previzualizarea, câmpurile și avertismentele. Este accesibil ca `switch` (activ = noapte), funcționează cu click, Enter și Space și respectă preferința pentru mișcare redusă. Preferința este salvată în `localStorage` și aplicată înaintea stilurilor pentru a evita afișarea temporară a altei teme. Dacă stocarea este blocată, comutatorul funcționează în continuare în pagina curentă, iar problema este raportată în consolă.
 
 ## Imagini și previzualizare
 

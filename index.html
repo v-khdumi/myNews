@@ -19,15 +19,25 @@
         my<span>News</span>
       </a>
       <span class="edition">ULTIMELE 24H</span>
-      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Mod noapte" aria-pressed="true" disabled>Noapte</button>
+      <button id="theme-toggle" class="theme-toggle" type="button" role="switch" aria-label="Temă întunecată" aria-checked="true" disabled>
+        <span class="theme-option theme-day" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
+          Zi
+        </span>
+        <span class="theme-track" aria-hidden="true"><span class="theme-thumb"></span></span>
+        <span class="theme-option theme-night" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13Z"/></svg>
+          Noapte
+        </span>
+      </button>
     </header>
 
     <main>
       <h1 class="sr-only">Știrile ultimelor 24 de ore</h1>
-        <div class="update-row">
-          <span id="update-status" role="status">Se încarcă știrile…</span>
-          <button id="refresh" class="refresh-button" type="button" disabled><span aria-hidden="true">↻</span> Reîncarcă</button>
-        </div>
+      <div class="update-row">
+        <span id="update-status" role="status">Se încarcă știrile…</span>
+        <button id="refresh" class="refresh-button" type="button" disabled><span aria-hidden="true">↻</span> Reîncarcă</button>
+      </div>
 
       <section class="news-panel" aria-label="Știri și filtre">
         <div class="toolbar">

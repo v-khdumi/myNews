@@ -2,7 +2,15 @@
 
 O singură pagină cu titlurile știrilor din ultimele **24 de ore** de la **HotNews, G4Media, Mediafax și Digi24**, cu linkuri către articolele originale.
 
-Interfață în română, adaptată pentru telefon, cu filtre pe surse, căutare fără diacritice, sortare și ore afișate în fusul `Europe/Bucharest`. Nu copiază articolele integrale, fotografiile sau conținutul cu abonament.
+Interfață în română, cu listă compactă pe telefon, filtre pe surse, căutare fără diacritice, sortare și ore afișate în fusul `Europe/Bucharest`. La apăsarea cardului, titlului sau imaginii se deschide o previzualizare în pagină, cu sursa, data, imaginea disponibilă și un scurt extras RSS. Butonul „Citește la sursă” deschide direct articolul original.
+
+## Imagini și previzualizare
+
+- Agregatorul extrage referințe la imagini din `media:thumbnail`, `media:content`, enclosure-uri de tip imagine și imaginile HTML din RSS. Sunt acceptate doar URL-uri HTTPS, inclusiv de pe CDN-urile folosite de publicații. Nu descarcă paginile articolelor și nu salvează copii ale fotografiilor.
+- Imaginile sunt încărcate direct de la gazda indicată în RSS, fără antet Referer; gazda poate vedea adresa IP a vizitatorului. Pe carduri se încarcă la nevoie (`loading="lazy"`). Dacă gazda blochează imaginea sau aceasta dispare, este afișat mesajul „Imagine indisponibilă”. Știrile fără imagine rămân accesibile.
+- Previzualizarea afișează numai descrierea/rezumatul RSS, fără HTML, limitat la 45 de cuvinte și 280 de caractere (plus marcajul de trunchiere). Nu importă textul integral din `content:encoded` și nu ocolește abonamentele. Dacă lipsește extrasul, interfața indică explicit acest lucru.
+- Numele publicației, linkul articolului original și creditul imaginii, când este oferit în RSS, apar în previzualizare. Imaginile și textele aparțin titularilor drepturilor; disponibilitatea în RSS nu transferă drepturile de republicare. Publicarea integrală sau reutilizarea materialelor necesită verificarea licenței/permisiunilor publicațiilor.
+- Fereastra de previzualizare poate fi închisă cu butonul „Închide”, tasta Escape sau apăsarea fundalului. Filtrele și poziția în listă sunt păstrate.
 
 ## Publicare pe GitHub Pages
 

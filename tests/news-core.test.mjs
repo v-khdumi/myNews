@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { currentArticles, DAY_MS, normalizeSearch, relativeTime, selectArticles, validArticle } from "../news-core.mjs";
+import { currentArticles, DAY_MS, normalizeSearch, relativeTime, safeImageUrl, selectArticles, validArticle } from "../news-core.mjs";
 
 const now = Date.parse("2026-10-28T22:30:00Z");
 function article(hours, overrides = {}) {
@@ -58,4 +58,19 @@ test("relative time labels", () => {
 
 test("markup in a title remains data", () => {
   assert.equal(validArticle(article(1, { title: "<img src=x onerror=alert(1)>" })), true);
+});
+
+test("images accept HTTPS CDN URLs without allowing unsafe schemes or credentials", () => {
+  assert.equal(safeImageUrl("https://cdn.example.com/image.jpg"), "https://cdn.example.com/image.jpg");
+  for (const url of [null, undefined, "", 42, "not a URL", "javascript:alert(1)",
+    "data:image/svg+xml,test", "http://cdn.example.com/a",
+    "https://user:pass@cdn.example.com/a", "https://cdn.example.com:9000/a"]) {
+    assert.equal(safeImageUrl(url), null);
+  }
+});
+
+test("old editions without image and excerpt fields remain compatible", () => {
+  assert.equal(validArticle(article(1)), true);
+  assert.equal(currentArticles([article(1)], now).length, 1);
+  assert.equal(safeImageUrl(article(1).image_url), null);
 });

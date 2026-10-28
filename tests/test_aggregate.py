@@ -9,7 +9,8 @@ from xml.sax.saxutils import escape
 
 from scripts.aggregate import (
     aggregate, clean_title, collect_source, FeedError, iso_date, main,
-    MAX_PAGES, page_url, parse_date, parse_feed, publisher_url, SOURCES,
+    image_url, MAX_PAGES, page_url, parse_date, parse_feed, publisher_url,
+    short_excerpt, SOURCES,
 )
 
 NOW = datetime(2026, 10, 28, 22, 30, tzinfo=timezone.utc)
@@ -103,6 +104,99 @@ class FeedParsingTests(unittest.TestCase):
     def test_page_url_preserves_existing_query(self):
         self.assertEqual(page_url("https://hotnews.ro/feed?x=1&paged=1", 2),
                          "https://hotnews.ro/feed?x=1&paged=2")
+
+
+class PreviewTests(unittest.TestCase):
+    def parse(self, metadata):
+        body = rss([item()]).decode().replace(
+            "<channel>",
+            '<channel xmlns:media="http://search.yahoo.com/mrss/" '
+            'xmlns:content="http://purl.org/rss/1.0/modules/content/">',
+        ).replace("</item>", metadata + "</item>")
+        return parse_feed(body.encode(), SOURCE, SOURCE.feeds[0])[0][0]
+
+    def test_extracts_media_thumbnail_and_credit(self):
+        article = self.parse(
+            '<media:thumbnail url="https://cdn.example.com/photo.jpg"/>'
+            '<media:credit><![CDATA[Foto: <b>Redacție</b>]]></media:credit>'
+            '<description><![CDATA[<p>Scurt <b>rezumat</b>.</p>]]></description>'
+        )
+        self.assertEqual(article["image_url"], "https://cdn.example.com/photo.jpg")
+        self.assertEqual(article["image_credit"], "Foto: Redacție")
+        self.assertEqual(article["excerpt"], "Scurt rezumat.")
+
+    def test_media_content_and_image_enclosures(self):
+        for metadata in (
+            '<media:content medium="image" url="https://cdn.example.com/photo.jpg"/>',
+            '<media:content type="image/jpeg" url="https://cdn.example.com/photo.jpg"/>',
+            '<enclosure type="image/jpeg" url="https://cdn.example.com/photo.jpg"/>',
+            '<link rel="enclosure" type="image/jpeg" href="https://cdn.example.com/photo.jpg"/>',
+        ):
+            with self.subTest(metadata=metadata):
+                self.assertEqual(self.parse(metadata)["image_url"], "https://cdn.example.com/photo.jpg")
+
+    def test_html_image_fallback_and_relative_url(self):
+        article = self.parse(
+            '<description><![CDATA[<p>Rezumat</p>'
+            '<img src="/images/photo.jpg" onerror="alert(1)">]]></description>'
+        )
+        self.assertEqual(article["image_url"], "https://hotnews.ro/images/photo.jpg")
+        self.assertEqual(article["excerpt"], "Rezumat")
+
+    def test_lazy_image_and_encoded_content_do_not_copy_body(self):
+        article = self.parse(
+            '<content:encoded><![CDATA[<img src="data:image/gif;base64,abc" '
+            'data-src="https://cdn.example.com/photo.jpg"><p>Text integral neimportat</p>]]></content:encoded>'
+        )
+        self.assertEqual(article["image_url"], "https://cdn.example.com/photo.jpg")
+        self.assertEqual(article["excerpt"], "")
+
+    def test_video_is_not_an_image_and_unsafe_candidate_is_skipped(self):
+        article = self.parse(
+            '<media:content medium="video" url="https://cdn.example.com/movie.mp4"/>'
+            '<enclosure type="audio/mpeg" url="https://cdn.example.com/audio.mp3"/>'
+            '<media:thumbnail url="javascript:alert(1)"/>'
+            '<description><![CDATA[<img src="https://cdn.example.com/photo.jpg">]]></description>'
+        )
+        self.assertEqual(article["image_url"], "https://cdn.example.com/photo.jpg")
+
+    def test_missing_optional_metadata_does_not_remove_article(self):
+        article = self.parse("")
+        self.assertIsNone(article["image_url"])
+        self.assertEqual(article["image_credit"], "")
+        self.assertEqual(article["excerpt"], "")
+
+    def test_atom_summary(self):
+        body = b'''<feed xmlns="http://www.w3.org/2005/Atom"><entry>
+          <title>Atom</title><link href="https://hotnews.ro/atom"/>
+          <published>2026-10-28T22:00:00Z</published>
+          <summary type="html">&lt;p&gt;Short preview&lt;/p&gt;</summary>
+          </entry></feed>'''
+        self.assertEqual(parse_feed(body, SOURCE, SOURCE.feeds[0])[0][0]["excerpt"], "Short preview")
+
+    def test_excerpt_removes_active_content_and_preserves_spacing(self):
+        self.assertEqual(short_excerpt(
+            "<p>Primul &amp; text</p><p>Al doilea</p><script>alert(1)</script>"
+            "<style>body{}</style><iframe>Nu se importă</iframe><noscript>Ascuns</noscript>"
+        ), "Primul & text Al doilea")
+
+    def test_excerpt_is_bounded_and_cache_reprocessing_is_stable(self):
+        for text in ("cuvânt " * 100, "cuvânt-lung " * 100, "x" * 400):
+            with self.subTest(text=text[:20]):
+                result = short_excerpt(text)
+                self.assertLessEqual(len(result), 281)
+                self.assertLessEqual(len(result.split()), 45)
+                self.assertTrue(result.endswith("…"))
+                self.assertEqual(short_excerpt(result), result)
+
+    def test_image_url_validation_and_cdn_support(self):
+        for value in ("javascript:alert(1)", "data:image/svg+xml,test", "http://cdn.example.com/a",
+                      "https://user:pass@cdn.example.com/a", "https://cdn.example.com:9000/a",
+                      "https://cdn.example.com:bad/a", ""):
+            with self.subTest(value=value):
+                self.assertIsNone(image_url(value, SOURCE.feeds[0]))
+        self.assertEqual(image_url("//cdn.example.com/photo.jpg#fragment", SOURCE.feeds[0]),
+                         "https://cdn.example.com/photo.jpg")
 
 
 class CollectionTests(unittest.TestCase):
@@ -244,6 +338,22 @@ class AggregationTests(unittest.TestCase):
             data = aggregate(NOW, fetcher=fetch)
         self.assertEqual(len(data["articles"]), 3)
         self.assertEqual(data["sources"][2]["status"], "error")
+
+    def test_cached_preview_metadata_survives_outage(self):
+        cached = {
+            **self.article(3, "cached"),
+            "excerpt": short_excerpt("cuvânt " * 100),
+            "image_url": "https://cdn.example.com/photo.jpg",
+            "image_credit": "Foto: Redacție",
+        }
+
+        def fail(*_):
+            raise FeedError("Unavailable")
+
+        with self.assertLogs("mynews"):
+            result = aggregate(NOW, {"sources": [], "articles": [cached]}, fail)["articles"][0]
+        for key in ("excerpt", "image_url", "image_credit"):
+            self.assertEqual(result[key], cached[key])
 
     def test_all_failed_does_not_overwrite_existing_file(self):
         with tempfile.TemporaryDirectory() as directory:

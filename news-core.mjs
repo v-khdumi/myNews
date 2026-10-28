@@ -6,6 +6,16 @@ export const SOURCES = [
   { id: "digi24", name: "Digi24", domain: "digi24.ro", homepage: "https://www.digi24.ro" },
 ];
 
+export function safeImageUrl(value) {
+  if (typeof value !== "string" || !value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password && !url.port ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 export function validArticle(article) {
   const source = SOURCES.find((entry) => entry.id === article?.source);
   if (!source || typeof article.title !== "string" || !article.title.trim()) return false;

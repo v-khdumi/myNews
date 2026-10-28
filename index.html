@@ -69,7 +69,7 @@
 
       <section class="about-strip" aria-label="Despre agregator">
         <span class="about-icon" aria-hidden="true">↗</span>
-        <div><h2>Jurnalismul aparține celor care îl fac.</h2><p>Noi adunăm titlurile. Articolele se citesc pe site-urile publicațiilor, unde munca redacțiilor contează.</p></div>
+        <div><h2>Jurnalismul aparține celor care îl fac.</h2><p>Aici vezi titlurile, imaginile și scurte extrase din RSS. Articolele integrale se citesc la sursa originală.</p></div>
         <span class="window-label">24h <span>fereastră mobilă</span></span>
       </section>
       <details class="source-details">
@@ -78,6 +78,20 @@
         <p>Actualizare programată la fiecare 30 de minute; GitHub poate întârzia rulările. Sunt afișate doar articole cu data publicării în ultimele 24 de ore, disponibile în fluxurile RSS. Unele fluxuri pot limita numărul de articole.</p>
       </details>
     </main>
+    <dialog id="article-reader" class="article-reader" aria-labelledby="reader-title" aria-describedby="reader-note">
+      <div class="reader-toolbar">
+        <span>PREVIZUALIZARE ȘTIRE</span>
+        <button id="close-reader" class="close-reader" type="button" autofocus>Închide <span aria-hidden="true">×</span></button>
+      </div>
+      <article class="reader-content">
+        <div id="reader-meta" class="reader-meta"></div>
+        <h2 id="reader-title"></h2>
+        <div id="reader-image"></div>
+        <p id="reader-excerpt" class="reader-excerpt"></p>
+        <p id="reader-note" class="reader-note">Scurt extras din fluxul RSS, nu articolul integral. Textul complet și drepturile asupra materialelor aparțin autorilor și publicației originale.</p>
+        <a id="reader-source" class="reader-source" target="_blank" rel="noopener noreferrer"></a>
+      </article>
+    </dialog>
     <footer><a class="footer-brand" href="./">myNews<span>.</span></a><span>Mai puțin zgomot. Mai multă informație.</span><span>Ora afișată: România · Europe/Bucharest</span></footer>
     <noscript><p class="noscript">Activează JavaScript pentru a vedea și filtra știrile agregate.</p></noscript>
   </body>

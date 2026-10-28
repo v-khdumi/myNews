@@ -1,10 +1,11 @@
-import { currentArticles, relativeTime, selectArticles, SOURCES, validArticle } from "./news-core.mjs";
+import { currentArticles, relativeTime, safeImageUrl, selectArticles, SOURCES, validArticle } from "./news-core.mjs";
 
 const $ = (selector) => document.querySelector(selector);
 const pageSize = 24;
 const state = { data: null, source: "all", query: "", sort: "newest", limit: pageSize, loading: false, error: "" };
 const fullDate = new Intl.DateTimeFormat("ro-RO", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Bucharest" });
 const shortDate = new Intl.DateTimeFormat("ro-RO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bucharest" });
+let readerArticleUrl = null;
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -13,9 +14,72 @@ function element(tag, className, text) {
   return node;
 }
 
+function articleImage(article, { thumbnail = false } = {}) {
+  const url = safeImageUrl(article.image_url);
+  if (!url) return null;
+  const container = element("div", "article-image");
+  const image = element("img");
+  image.alt = "";
+  image.loading = thumbnail ? "lazy" : "eager";
+  image.decoding = "async";
+  image.referrerPolicy = "no-referrer";
+  const fallback = element("span", "image-unavailable", "Imagine indisponibilă");
+  fallback.hidden = true;
+  image.addEventListener("error", () => {
+    console.warn("Imaginea știrii nu a putut fi încărcată:", url);
+    image.hidden = true;
+    fallback.hidden = false;
+  }, { once: true });
+  image.src = url;
+  container.append(image, fallback);
+  return container;
+}
+
+function openArticle(article) {
+  const source = SOURCES.find((entry) => entry.id === article.source);
+  readerArticleUrl = article.url;
+  $("#reader-title").textContent = article.title;
+  $("#reader-meta").textContent = `${source.name} · ${fullDate.format(new Date(article.published_at))}`;
+  $("#reader-excerpt").textContent = typeof article.excerpt === "string" && article.excerpt.trim()
+    ? article.excerpt
+    : "Sursa nu oferă un extras în fluxul RSS pentru această știre. Poți citi articolul complet folosind linkul de mai jos.";
+  const image = articleImage(article);
+  $("#reader-image").replaceChildren();
+  if (image) {
+    const figure = element("figure");
+    const credit = typeof article.image_credit === "string" && article.image_credit.trim()
+      ? `Credit imagine (RSS): ${article.image_credit}`
+      : `Imagine asociată în fluxul RSS ${source.name}.`;
+    figure.append(image, element("figcaption", "", credit));
+    $("#reader-image").append(figure);
+  }
+  $("#reader-source").href = article.url;
+  $("#reader-source").textContent = `Citește articolul integral la ${source.name} ↗`;
+  $("#reader-source").setAttribute("aria-label", `Citește articolul integral la ${source.name} (filă nouă)`);
+  document.documentElement.classList.add("reader-open");
+  if (!$("#article-reader").open) $("#article-reader").showModal();
+  $("#article-reader").scrollTop = 0;
+  $("#close-reader").focus({ preventScroll: true });
+}
+
 function articleCard(article, now) {
   const source = SOURCES.find((entry) => entry.id === article.source);
   const card = element("article", `news-card ${source.id}`);
+  card.dataset.url = article.url;
+  card.addEventListener("click", (event) => {
+    if (event.target.closest("a")) return;
+    openArticle(article);
+  });
+  const image = articleImage(article, { thumbnail: true });
+  if (image) {
+    card.classList.add("has-image");
+    const imageButton = element("button", "card-image-button");
+    imageButton.type = "button";
+    imageButton.setAttribute("aria-label", `Previzualizează: ${article.title}`);
+    imageButton.setAttribute("aria-haspopup", "dialog");
+    imageButton.append(image);
+    card.append(imageButton);
+  }
   const meta = element("div", "card-meta");
   const publisher = element("span", "publisher");
   const dot = element("span", "source-dot");
@@ -27,10 +91,9 @@ function articleCard(article, now) {
   meta.append(publisher, time);
 
   const heading = element("h3");
-  const title = element("a", "", article.title);
-  title.href = article.url;
-  title.target = "_blank";
-  title.rel = "noopener noreferrer";
+  const title = element("button", "article-title", article.title);
+  title.type = "button";
+  title.setAttribute("aria-haspopup", "dialog");
   heading.append(title);
   const bottom = element("div", "card-bottom");
   const date = element("span", "", shortDate.format(new Date(article.published_at)));
@@ -73,10 +136,12 @@ function render() {
   const selected = selectArticles(articles, { ...state, now });
   const shown = selected.slice(0, state.limit);
   const focusedArticle = document.activeElement?.closest(".news-card");
-  const focusedUrl = focusedArticle ? document.activeElement.href : null;
+  const focusedUrl = focusedArticle?.dataset.url;
+  const focusedClass = focusedArticle ? document.activeElement.className : null;
   $("#news").replaceChildren(...shown.map((article) => articleCard(article, now)));
   if (focusedUrl) {
-    Array.from($("#news").querySelectorAll("a")).find((link) => link.href === focusedUrl)?.focus({ preventScroll: true });
+    const card = Array.from($("#news").children).find((entry) => entry.dataset.url === focusedUrl);
+    Array.from(card?.querySelectorAll("button, a") ?? []).find((entry) => entry.className === focusedClass)?.focus({ preventScroll: true });
   }
   $("#news").setAttribute("aria-busy", String(state.loading));
   $("#result-count").textContent = `${selected.length} ${selected.length === 1 ? "știre" : "știri"}`;
@@ -187,7 +252,7 @@ $("#load-more").addEventListener("click", () => {
   const previous = state.limit;
   state.limit += pageSize;
   render();
-  $("#news").children[previous]?.querySelector("a")?.focus({ preventScroll: true });
+  $("#news").children[previous]?.querySelector(".article-title")?.focus({ preventScroll: true });
 });
 $("#reset-filters").addEventListener("click", () => {
   state.source = "all";
@@ -198,6 +263,32 @@ $("#reset-filters").addEventListener("click", () => {
   $("#search").focus();
 });
 $("#refresh").addEventListener("click", loadNews);
+$("#close-reader").addEventListener("click", () => $("#article-reader").close());
+$("#article-reader").addEventListener("keydown", (event) => {
+  if (event.key !== "Tab") return;
+  const first = $("#close-reader");
+  const last = $("#reader-source");
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+});
+$("#article-reader").addEventListener("click", (event) => {
+  if (event.target !== $("#article-reader")) return;
+  const bounds = event.target.getBoundingClientRect();
+  if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) {
+    $("#article-reader").close();
+  }
+});
+$("#article-reader").addEventListener("close", () => {
+  document.documentElement.classList.remove("reader-open");
+  const card = Array.from($("#news").children).find((entry) => entry.dataset.url === readerArticleUrl);
+  (card?.querySelector(".article-title") ?? $("#news")).focus({ preventScroll: true });
+  readerArticleUrl = null;
+});
 setInterval(() => { if (!document.hidden) render(); }, 60000);
 setInterval(() => { if (!document.hidden) loadNews(); }, 5 * 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) loadNews(); });

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect publisher RSS headlines, without copying article bodies."""
+"""Collect RSS headlines, short previews and publisher-hosted image references."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -56,10 +56,94 @@ class TitleParser(HTMLParser):
         self.parts.append(data)
 
 
+class PreviewParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.images = []
+        self.ignored = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"script", "style", "iframe", "noscript", "svg"}:
+            self.ignored += 1
+        if self.ignored:
+            return
+        if tag in {"p", "br", "div", "li"}:
+            self.parts.append(" ")
+        if tag == "img":
+            attributes = dict(attrs)
+            self.images.append(attributes.get("data-src") or attributes.get("src") or "")
+
+    def handle_endtag(self, tag):
+        if tag in {"script", "style", "iframe", "noscript", "svg"}:
+            self.ignored = max(0, self.ignored - 1)
+        if not self.ignored and tag in {"p", "div", "li"}:
+            self.parts.append(" ")
+
+    def handle_data(self, data):
+        if not self.ignored:
+            self.parts.append(data)
+
+
 def clean_title(value):
     parser = TitleParser()
     parser.feed(value)
     return " ".join(html.unescape("".join(parser.parts)).split())
+
+
+def short_excerpt(value):
+    parser = PreviewParser()
+    parser.feed(value)
+    text = " ".join("".join(parser.parts).split())
+    truncated = text.endswith("…")
+    if truncated:
+        text = text[:-1]
+    words = text.split()
+    clipped = " ".join(words[:45])
+    if len(clipped) > 280:
+        clipped = clipped[:281].rsplit(" ", 1)[0][:280]
+    return clipped + ("…" if truncated or len(clipped) < len(text) else "")
+
+
+def image_url(value, base):
+    if not value:
+        return None
+    try:
+        url = urlsplit(urljoin(base, value.strip()))
+        if url.scheme != "https" or not url.hostname or url.username or url.password or url.port not in {None, 443}:
+            return None
+        return urlunsplit(url._replace(fragment=""))
+    except ValueError:
+        return None
+
+
+def preview_metadata(item, base):
+    candidates = []
+    credit = ""
+    for node in item.iter():
+        name = local_name(node.tag)
+        media = node.tag.startswith("{http://search.yahoo.com/mrss/}")
+        if media and name in {"credit", "copyright"} and node.text and not credit:
+            credit = clean_title(node.text)[:200]
+        if ((media and name in {"thumbnail", "content"}
+             and (name == "thumbnail" or node.attrib.get("medium") == "image"
+                  or node.attrib.get("type", "").startswith("image/")
+                  or ("medium" not in node.attrib and "type" not in node.attrib)))
+                or (name == "enclosure" and node.attrib.get("type", "").startswith("image/"))
+                or (name == "link" and node.attrib.get("rel") == "enclosure"
+                    and node.attrib.get("type", "").startswith("image/"))):
+            candidates.append(node.attrib.get("url") or node.attrib.get("href") or "")
+    for node in item:
+        if local_name(node.tag) in {"description", "summary", "encoded"} and node.text:
+            parser = PreviewParser()
+            parser.feed(node.text)
+            candidates.extend(parser.images)
+    image = next((url for candidate in candidates if (url := image_url(candidate, base))), None)
+    return {
+        "excerpt": short_excerpt(child_text(item, ("description", "summary"))),
+        "image_url": image,
+        "image_credit": credit if image else "",
+    }
 
 
 def iso_date(value):
@@ -143,6 +227,7 @@ def parse_feed(body, source, base_url):
             "title": title,
             "url": url,
             "published_at": iso_date(published),
+            **preview_metadata(item, url),
         })
     next_url = None
     # Only feed-level links can paginate; article-level "next" links cannot.
@@ -268,7 +353,13 @@ def aggregate(now, previous=None, fetcher=fetch_feed):
         if source and published and cutoff <= published <= now and article.get("title"):
             url = publisher_url(article.get("url"), source)
             if url:
-                article = {**article, "url": url, "id": hashlib.sha256(url.encode()).hexdigest()[:24]}
+                image = image_url(article.get("image_url"), url)
+                article = {
+                    **article, "url": url, "id": hashlib.sha256(url.encode()).hexdigest()[:24],
+                    "excerpt": short_excerpt(article.get("excerpt") or ""),
+                    "image_url": image,
+                    "image_credit": clean_title(article.get("image_credit") or "")[:200] if image else "",
+                }
                 articles[article["id"]] = article
     with ThreadPoolExecutor(max_workers=len(SOURCES)) as pool:
         results = list(pool.map(collect, SOURCES))

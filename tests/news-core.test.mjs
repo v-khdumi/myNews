@@ -77,7 +77,7 @@ test("old editions without image and excerpt fields remain compatible", () => {
 
 test("all nine sources accept their own links and are individually filterable", () => {
   assert.deepEqual(SOURCES.map((source) => source.id), [
-    "hotnews", "g4media", "mediafax", "digi24", "descopera", "biziday", "zonait", "go4it", "playtech",
+    "hotnews", "g4media", "mediafax", "digi24", "descopera", "biziday", "zonait", "go4it", "stiripesurse",
   ]);
   const articles = SOURCES.map((source) => article(1, {
     source: source.id, url: `${source.homepage}/article`,
@@ -88,6 +88,13 @@ test("all nine sources accept their own links and are individually filterable", 
     assert.equal(result[0].source, source.id);
     assert.equal(validArticle(article(1, { source: source.id, url: "https://unrelated.example/article" })), false);
   }
+});
+
+test("replacement publisher accepts both hostnames and removed publisher is rejected", () => {
+  for (const hostname of ["stiripesurse.ro", "www.stiripesurse.ro"]) {
+    assert.equal(validArticle(article(1, { source: "stiripesurse", url: `https://${hostname}/stire` })), true);
+  }
+  assert.equal(validArticle(article(1, { source: "playtech", url: "https://playtech.ro/stire" })), false);
 });
 
 test("old four-source editions retain news and show new sources as pending", () => {

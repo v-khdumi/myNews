@@ -8,7 +8,7 @@ export const SOURCES = [
   { id: "biziday", name: "Biziday", domain: "biziday.ro", homepage: "https://www.biziday.ro" },
   { id: "zonait", name: "Zona IT", domain: "zonait.ro", homepage: "https://zonait.ro" },
   { id: "go4it", name: "Go4it", domain: "go4it.ro", homepage: "https://www.go4it.ro" },
-  { id: "playtech", name: "Playtech", domain: "playtech.ro", homepage: "https://playtech.ro" },
+  { id: "stiripesurse", name: "Știripesurse.ro", domain: "stiripesurse.ro", homepage: "https://www.stiripesurse.ro" },
 ];
 
 export function validateEdition(data) {

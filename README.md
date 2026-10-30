@@ -1,6 +1,6 @@
 # myNews
 
-O singură pagină cu titlurile știrilor din ultimele **24 de ore** de la **HotNews, G4Media, Mediafax, Digi24, Descoperă, Biziday, Zona IT, Go4it și Playtech**, cu linkuri către articolele originale.
+O singură pagină cu titlurile știrilor din ultimele **24 de ore** de la **HotNews, G4Media, Mediafax, Digi24, Descoperă, Biziday, Zona IT, Go4it și Știripesurse.ro**, cu linkuri către articolele originale.
 
 Interfață în română, cu listă compactă pe telefon, filtre pe surse, căutare fără diacritice, sortare și ore afișate în fusul `Europe/Bucharest`. La apăsarea cardului, titlului sau imaginii se deschide o previzualizare în pagină, cu sursa, data, imaginea disponibilă și un scurt extras RSS. Butonul „Citește la sursă” deschide direct articolul original.
 
@@ -17,6 +17,7 @@ Tema **noapte este implicită**, indiferent de tema sistemului. Toggle-ul **Zi /
 - Previzualizarea afișează numai descrierea/rezumatul RSS, fără HTML, limitat la 45 de cuvinte și 280 de caractere (plus marcajul de trunchiere). Nu importă textul integral din `content:encoded` și nu ocolește abonamentele. Dacă lipsește extrasul, interfața indică explicit acest lucru.
 - Numele publicației, linkul articolului original și creditul imaginii, când este oferit în RSS, apar în previzualizare. Imaginile și textele aparțin titularilor drepturilor; disponibilitatea în RSS nu transferă drepturile de republicare. Publicarea integrală sau reutilizarea materialelor necesită verificarea licenței/permisiunilor publicațiilor.
 - Fereastra de previzualizare poate fi închisă cu butonul „Închide”, tasta Escape sau apăsarea fundalului. Filtrele și poziția în listă sunt păstrate.
+- Pe mobil, previzualizarea folosește spațieri compacte și o imagine redusă, pentru a evita derularea inutilă. Butoanele de închidere și de citire a articolului integral rămân vizibile; dacă textul este foarte lung sau mărit, se derulează doar conținutul, fără trunchiere.
 
 ## Publicare pe GitHub Pages
 
@@ -32,7 +33,7 @@ Activarea Pages și, dacă este cazul, schimbarea vizibilității necesită drep
 - GitHub Actions preia RSS-urile la minutele **07 și 37** ale fiecărei ore. Rulările programate pot întârzia; nu este o actualizare în timp real. În repository-uri publice fără activitate timp de 60 de zile, GitHub poate dezactiva programarea; reactiveaz-o din Actions.
 - Browserul reîncarcă ediția publicată la fiecare 5 minute și elimină știrile expirate în fiecare minut, chiar dacă pagina rămâne deschisă. „Reîncarcă” citește ediția publicată, nu declanșează preluarea RSS.
 - Atât agregatorul, cât și pagina filtrează după **data publicării**, între momentul curent minus 24 de ore și momentul curent. Articolele fără dată validă sau cu dată în viitor nu sunt afișate.
-- Sunt folosite fluxurile publicațiilor: HotNews `/feed` (alternativ `/rss`), G4Media `/feed`, Mediafax `/rss` (alternativ `/feed`), Digi24 `/rss`, Descoperă `/feed` (alternativ `/rss`), Biziday `/feed`, Zona IT `/feed`, Go4it `/feed` (alternativ `/rss`) și Playtech `/feed`. Pentru fluxurile WordPress se încearcă paginarea `?paged=N`; sunt urmate și linkurile RSS/Atom `rel="next"`. Există o limită de 40 de pagini pe sursă și rulare.
+- Sunt folosite fluxurile publicațiilor: HotNews `/feed` (alternativ `/rss`), G4Media `/feed`, Mediafax `/rss` (alternativ `/feed`), Digi24 `/rss`, Descoperă `/feed` (alternativ `/rss`), Biziday `/feed`, Zona IT `/feed`, Go4it `/feed` (alternativ `/rss`) și Știripesurse.ro `/rss/stiri.xml`. Pentru fluxurile WordPress se încearcă paginarea `?paged=N`; sunt urmate și linkurile RSS/Atom `rel="next"`. Digi24 și Știripesurse.ro nu folosesc paginarea WordPress; lipsa unei pagini următoare este semnalată ca acoperire limitată. Există o limită de 40 de pagini pe sursă și rulare.
 - Acoperirea depinde de fluxurile publicate, de suportul pentru paginare și de disponibilitatea publicațiilor; nu poate fi garantat că fiecare articol de pe site-uri apare în RSS. Interfața semnalează sursele indisponibile și fluxurile cu acoperire limitată.
 - Ediția precedentă este păstrată în cache-ul Actions. Articolele încă recente sunt păstrate chiar dacă dispar din RSS sau o sursă nu răspunde. Cache-ul poate fi eliminat de GitHub, deci nu este o arhivă permanentă.
 - Dacă toate sursele eșuează și nu există știri recente în cache, publicarea este oprită pentru a nu înlocui ediția existentă cu una goală. Interfața existentă avertizează când ediția este veche și nu afișează articole mai vechi de 24 de ore.

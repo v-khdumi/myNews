@@ -1,73 +1,44 @@
-name: Actualizează și publică știrile
+name: RSS connectivity diagnostic
 
 on:
-  push:
-    branches: [main]
-  schedule:
-    - cron: "7,37 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: github-pages
-  cancel-in-progress: false
-
 jobs:
-  build:
+  diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
-      - name: Descarcă repository-ul
-        uses: actions/checkout@v4
-      - name: Configurează Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Configurează Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Verifică agregatorul și filtrele
+      - uses: actions/checkout@v4
+      - name: Check public RSS endpoints without deploying
         run: |
-          python -m unittest discover -s tests -p 'test_*.py'
-          node --test tests/*.test.mjs
-      - name: Restaurează ediția precedentă
-        uses: actions/cache/restore@v4
-        with:
-          path: .cache/news.json
-          key: news-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            news-
-      - name: Construiește pagina și preia știrile
-        run: |
-          mkdir -p _site/data .cache
-          cp index.html styles.css theme.js app.mjs news-core.mjs favicon.svg _site/
-          touch _site/.nojekyll
-          python scripts/aggregate.py --previous .cache/news.json --output _site/data/news.json
-          cp _site/data/news.json .cache/news.json
-      - name: Păstrează ediția pentru următoarea actualizare
-        uses: actions/cache/save@v4
-        with:
-          path: .cache/news.json
-          key: news-${{ github.run_id }}-${{ github.run_attempt }}
-      - name: Pregătește publicarea
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Publică pe GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          python - <<'PY'
+          from concurrent.futures import ThreadPoolExecutor
+          from urllib.request import Request, urlopen
+          from urllib.error import HTTPError, URLError
+          from scripts.aggregate import SOURCES, parse_feed
+          source = next(s for s in SOURCES if s.id == "stiripesurse")
+          endpoints = [
+              "https://www.stiripesurse.ro/rss/stiri.xml",
+              "https://stiripesurse.ro/rss/stiri.xml",
+              "https://www.stiripesurse.ro/rss/stirile-zilei.xml",
+          ]
+          agents = ["myNews-RSS/1.0 (GitHub Pages headline aggregator)", "Python-urllib/3.12"]
+          def check(pair):
+              url, agent = pair
+              request = Request(url, headers={"User-Agent": agent, "Accept": "application/rss+xml, application/xml, text/xml;q=0.9"})
+              try:
+                  with urlopen(request, timeout=20) as response:
+                      body = response.read(8 * 1024 * 1024)
+                      articles = parse_feed(body, source, response.url)[0]
+                      return f"{url} | {agent} | HTTP {response.status} | articles={len(articles)}"
+              except HTTPError as error:
+                  return f"{url} | {agent} | HTTP {error.code} | headers={dict(error.headers)} | body={error.read(1500)!r}"
+              except Exception as error:
+                  return f"{url} | {agent} | {type(error).__name__}: {error}"
+          with ThreadPoolExecutor(max_workers=6) as pool:
+              for result in pool.map(check, [(url, agent) for url in endpoints for agent in agents]):
+                  print(result)
+          PY

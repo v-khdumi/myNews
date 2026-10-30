@@ -97,6 +97,25 @@ test("replacement publisher accepts both hostnames and removed publisher is reje
   assert.equal(validArticle(article(1, { source: "playtech", url: "https://playtech.ro/stire" })), false);
 });
 
+test("Google News links require explicit provenance and the selected publisher", () => {
+  const syndicated = article(1, {
+    source: "stiripesurse", via: "google_news", url: "https://news.google.com/rss/articles/test-token?oc=5",
+  });
+  assert.equal(validArticle(syndicated), true);
+  assert.equal(currentArticles([syndicated], now).length, 1);
+  assert.equal(validArticle({ ...syndicated, via: undefined }), false);
+  assert.equal(validArticle({ ...syndicated, source: "hotnews" }), false);
+  for (const url of ["https://news.google.com/other", "https://evil.example/rss/articles/token",
+    "https://news.google.com.evil.example/rss/articles/token", "http://news.google.com/rss/articles/token",
+    "https://news.google.com:9000/rss/articles/token"]) {
+    assert.equal(validArticle({ ...syndicated, url }), false);
+  }
+  assert.equal(validateEdition({
+    generated_at: new Date(now).toISOString(),
+    articles: [syndicated], sources: SOURCES.map(({ id }) => ({ id, status: "ok" })),
+  }).articles[0].via, "google_news");
+});
+
 test("old four-source editions retain news and show new sources as pending", () => {
   const old = {
     generated_at: new Date(now).toISOString(),

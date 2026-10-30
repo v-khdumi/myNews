@@ -18,6 +18,7 @@ Tema **noapte este implicită**, indiferent de tema sistemului. Toggle-ul **Zi /
 - Numele publicației, linkul articolului original și creditul imaginii, când este oferit în RSS, apar în previzualizare. Imaginile și textele aparțin titularilor drepturilor; disponibilitatea în RSS nu transferă drepturile de republicare. Publicarea integrală sau reutilizarea materialelor necesită verificarea licenței/permisiunilor publicațiilor.
 - Fereastra de previzualizare poate fi închisă cu butonul „Închide”, tasta Escape sau apăsarea fundalului. Filtrele și poziția în listă sunt păstrate.
 - Pe mobil, previzualizarea folosește spațieri compacte și o imagine redusă, pentru a evita derularea inutilă. Butoanele de închidere și de citire a articolului integral rămân vizibile; dacă textul este foarte lung sau mărit, se derulează doar conținutul, fără trunchiere.
+- Dacă RSS-ul direct Știripesurse.ro este indisponibil, agregatorul folosește RSS-ul public Google News, filtrat după publicație și ultimele 24 de ore. Sunt acceptate numai intrări care indică domeniul publicației în câmpul sursei. Aceste știri sunt etichetate „via Google News”; linkurile trec prin Google News către publicație, fără importarea descrierilor sau imaginilor din index. Acoperirea este limitată la articolele indexate, iar indisponibilitatea ambelor fluxuri este raportată explicit.
 
 ## Publicare pe GitHub Pages
 

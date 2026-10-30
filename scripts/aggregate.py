@@ -33,6 +33,7 @@ class Source:
     domain: str
     feeds: tuple[str, ...]
     paginated: bool = True
+    google_news_feed: str | None = None
 
 
 SOURCES = (
@@ -44,7 +45,9 @@ SOURCES = (
     Source("biziday", "Biziday", "biziday.ro", ("https://www.biziday.ro/feed",)),
     Source("zonait", "Zona IT", "zonait.ro", ("https://zonait.ro/feed",)),
     Source("go4it", "Go4it", "go4it.ro", ("https://www.go4it.ro/feed", "https://www.go4it.ro/rss")),
-    Source("stiripesurse", "Știripesurse.ro", "stiripesurse.ro", ("https://www.stiripesurse.ro/rss/stiri.xml",), paginated=False),
+    Source("stiripesurse", "Știripesurse.ro", "stiripesurse.ro",
+           ("https://www.stiripesurse.ro/rss/stiri.xml",), paginated=False,
+           google_news_feed="https://news.google.com/rss/search?q=site%3Astiripesurse.ro+when%3A1d&hl=ro&gl=RO&ceid=RO%3Aro"),
 )
 
 
@@ -190,6 +193,20 @@ def local_name(tag):
     return tag.rsplit("}", 1)[-1]
 
 
+def google_news_article_url(value, source):
+    if not source.google_news_feed or not value:
+        return None
+    try:
+        url = urlsplit(value.strip())
+        if (url.scheme != "https" or url.hostname != "news.google.com"
+                or url.username or url.password or url.port
+                or not re.fullmatch(r"/rss/articles/[A-Za-z0-9_-]+", url.path)):
+            return None
+        return urlunsplit(url._replace(fragment=""))
+    except ValueError:
+        return None
+
+
 def child_text(node, names):
     for name in names:
         for child in node:
@@ -199,6 +216,7 @@ def child_text(node, names):
 
 
 def parse_feed(body, source, base_url):
+    via_google_news = base_url == source.google_news_feed
     if re.search(br"<!\s*(DOCTYPE|ENTITY)\b", body, re.IGNORECASE):
         raise FeedError("Fluxul conține declarații XML nesigure.")
     try:
@@ -213,6 +231,14 @@ def parse_feed(body, source, base_url):
     entries = [node for node in root.iter() if local_name(node.tag) in {"item", "entry"}]
     for item in entries:
         title = clean_title(child_text(item, ("title",)))
+        if via_google_news:
+            publisher = next((node for node in item if local_name(node.tag) == "source"), None)
+            if publisher is None or not publisher_url(publisher.attrib.get("url"), source):
+                invalid += 1
+                continue
+            publisher_name = clean_title(publisher.text or "")
+            if publisher_name:
+                title = "" if title == f"- {publisher_name}" else title.removesuffix(f" - {publisher_name}").strip()
         published = parse_date(child_text(item, ("pubDate", "published", "date", "updated")))
         link = ""
         for node in item:
@@ -220,19 +246,22 @@ def parse_feed(body, source, base_url):
                 link = node.attrib.get("href") or node.text or ""
                 if link.strip():
                     break
-        url = publisher_url(link, source, base_url)
+        url = google_news_article_url(link, source) if via_google_news else publisher_url(link, source, base_url)
         if published:
             dates.append(published)
         if not title or not published or not url:
             invalid += 1
             continue
+        metadata = {
+            "excerpt": "", "image_url": None, "image_credit": "", "via": "google_news",
+        } if via_google_news else preview_metadata(item, url)
         articles.append({
             "id": hashlib.sha256(url.encode()).hexdigest()[:24],
             "source": source.id,
             "title": title,
             "url": url,
             "published_at": iso_date(published),
-            **preview_metadata(item, url),
+            **metadata,
         })
     next_url = None
     # Only feed-level links can paginate; article-level "next" links cannot.
@@ -254,7 +283,7 @@ def fetch_feed(url, source):
     for attempt in range(2):
         try:
             with urlopen(request, timeout=25) as response:
-                if not publisher_url(response.url, source):
+                if not publisher_url(response.url, source) and response.url != source.google_news_feed:
                     raise FeedError("Redirecționare în afara publicației.")
                 data = response.read(MAX_FEED_BYTES + 1)
                 if len(data) > MAX_FEED_BYTES:
@@ -280,7 +309,8 @@ def collect_source(source, now, fetcher=fetch_feed):
     base_url = None
     parsed = None
     failures = []
-    for candidate in source.feeds:
+    candidates = source.feeds + ((source.google_news_feed,) if source.google_news_feed else ())
+    for candidate in candidates:
         try:
             parsed = parse_feed(fetcher(candidate, source), source, candidate)
             base_url = candidate
@@ -290,6 +320,10 @@ def collect_source(source, now, fetcher=fetch_feed):
             LOG.warning("%s (%s): %s", source.name, candidate, error)
     if parsed is None:
         raise FeedError("; ".join(failures))
+    via_google_news = base_url == source.google_news_feed
+    if via_google_news:
+        warnings.append("Fluxul direct este indisponibil. Știrile sunt preluate prin Google News, cu acoperire limitată.")
+        LOG.warning("%s: se folosește RSS-ul Google News.", source.name)
     visited_urls = {base_url}
     for page in range(1, MAX_PAGES + 1):
         items, dates, next_url, invalid = parsed
@@ -307,7 +341,8 @@ def collect_source(source, now, fetcher=fetch_feed):
         if not items or (dates and min(dates) < cutoff):
             break
         if not next_url and not source.paginated:
-            warnings.append("Fluxul publică un număr limitat de articole, fără paginare.")
+            if not via_google_news:
+                warnings.append("Fluxul publică un număr limitat de articole, fără paginare.")
             break
         if page == MAX_PAGES:
             warnings.append("S-a atins limita de paginare; unele articole pot lipsi.")
@@ -356,7 +391,8 @@ def aggregate(now, previous=None, fetcher=fetch_feed):
         source = next((entry for entry in SOURCES if entry.id == article.get("source")), None)
         published = parse_date(article.get("published_at"))
         if source and published and cutoff <= published <= now and article.get("title"):
-            url = publisher_url(article.get("url"), source)
+            url = (google_news_article_url(article.get("url"), source)
+                   if article.get("via") == "google_news" else publisher_url(article.get("url"), source))
             if url:
                 image = image_url(article.get("image_url"), url)
                 article = {

@@ -37,12 +37,18 @@ function articleImage(article, { thumbnail = false } = {}) {
 
 function openArticle(article) {
   const source = SOURCES.find((entry) => entry.id === article.source);
+  const via = article.via === "google_news" ? " via Google News" : "";
   readerArticleUrl = article.url;
   $("#reader-title").textContent = article.title;
-  $("#reader-meta").textContent = `${source.name} · ${fullDate.format(new Date(article.published_at))}`;
+  $("#reader-meta").textContent = `${source.name}${via} · ${fullDate.format(new Date(article.published_at))}`;
   $("#reader-excerpt").textContent = typeof article.excerpt === "string" && article.excerpt.trim()
     ? article.excerpt
-    : "Sursa nu oferă un extras în fluxul RSS pentru această știre. Poți citi articolul complet folosind linkul de mai jos.";
+    : via
+      ? "Indexul Google News oferă titlul și data, fără extras sau imagine. Poți citi articolul folosind linkul de mai jos."
+      : "Sursa nu oferă un extras în fluxul RSS pentru această știre. Poți citi articolul complet folosind linkul de mai jos.";
+  $("#reader-note").textContent = via
+    ? "Titlu și dată din indexul Google News, nu articolul integral. Linkul trece prin Google News către publicație. Drepturile asupra materialelor aparțin autorilor și publicației originale."
+    : "Scurt extras din fluxul RSS, nu articolul integral. Textul complet și drepturile asupra materialelor aparțin autorilor și publicației originale.";
   const image = articleImage(article);
   $("#reader-image").replaceChildren();
   if (image) {
@@ -54,8 +60,8 @@ function openArticle(article) {
     $("#reader-image").append(figure);
   }
   $("#reader-source").href = article.url;
-  $("#reader-source").textContent = `Citește articolul integral la ${source.name} ↗`;
-  $("#reader-source").setAttribute("aria-label", `Citește articolul integral la ${source.name} (filă nouă)`);
+  $("#reader-source").textContent = `Citește articolul integral la ${source.name}${via} ↗`;
+  $("#reader-source").setAttribute("aria-label", `Citește articolul integral la ${source.name}${via} (filă nouă)`);
   document.documentElement.classList.add("reader-open");
   if (!$("#article-reader").open) $("#article-reader").showModal();
   $("#article-reader").scrollTop = 0;
@@ -98,11 +104,12 @@ function articleCard(article, now) {
   heading.append(title);
   const bottom = element("div", "card-bottom");
   const date = element("span", "", shortDate.format(new Date(article.published_at)));
-  const link = element("a", "read-link", "Citește la sursă");
+  const via = article.via === "google_news" ? " via Google News" : "";
+  const link = element("a", "read-link", via ? "Citește via Google News" : "Citește la sursă");
   link.href = article.url;
   link.target = "_blank";
   link.rel = "noopener noreferrer";
-  link.setAttribute("aria-label", `Citește la ${source.name}: ${article.title} (filă nouă)`);
+  link.setAttribute("aria-label", `Citește la ${source.name}${via}: ${article.title} (filă nouă)`);
   const arrow = element("b", "", "↗");
   arrow.setAttribute("aria-hidden", "true");
   link.append(arrow);

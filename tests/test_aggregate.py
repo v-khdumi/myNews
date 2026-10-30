@@ -8,7 +8,7 @@ from unittest.mock import patch
 from xml.sax.saxutils import escape
 
 from scripts.aggregate import (
-    aggregate, clean_title, collect_source, FeedError, iso_date, main,
+    aggregate, clean_title, collect_source, FeedError, fetch_feed, iso_date, main,
     image_url, MAX_PAGES, page_url, parse_date, parse_feed, publisher_url,
     short_excerpt, SOURCES,
 )
@@ -418,6 +418,110 @@ class AggregationTests(unittest.TestCase):
                 main()
             self.assertEqual(json.loads(output.read_text()), data)
             self.assertFalse(output.with_suffix(".tmp").exists())
+
+
+class GoogleNewsTests(unittest.TestCase):
+    source = next(source for source in SOURCES if source.id == "stiripesurse")
+    article_url = "https://news.google.com/rss/articles/test-token?oc=5"
+
+    def feed(self, title="Titlu de test - Stiripesurse", domain="www.stiripesurse.ro"):
+        return rss([(title, self.article_url, format_datetime(NOW - timedelta(hours=1)))]).replace(
+            b"</item>",
+            (f'<description>&lt;img src="https://cdn.example.com/photo.jpg"&gt;Nu este un extras RSS</description>'
+             f'<source url="https://{domain}">Stiripesurse</source></item>').encode(),
+        )
+
+    def test_requires_matching_publisher_and_omits_index_description(self):
+        for domain in ("www.stiripesurse.ro", "stiripesurse.ro"):
+            with self.subTest(domain=domain):
+                articles, _, _, invalid = parse_feed(self.feed(domain=domain), self.source, self.source.google_news_feed)
+                self.assertEqual(invalid, 0)
+                self.assertEqual(articles[0]["title"], "Titlu de test")
+                self.assertEqual(articles[0]["url"], self.article_url)
+                self.assertEqual(articles[0]["via"], "google_news")
+                self.assertEqual(articles[0]["excerpt"], "")
+                self.assertIsNone(articles[0]["image_url"])
+        for domain in ("other.example", "stiripesurse.ro.evil.example"):
+            with self.subTest(domain=domain), self.assertRaises(FeedError):
+                parse_feed(self.feed(domain=domain), self.source, self.source.google_news_feed)
+
+    def test_missing_publisher_and_empty_headlines_are_rejected(self):
+        missing_publisher = rss([("Titlu", self.article_url, format_datetime(NOW))])
+        for body in (missing_publisher, self.feed(title=" - Stiripesurse"), self.feed(title="")):
+            with self.subTest(body=body), self.assertRaises(FeedError):
+                parse_feed(body, self.source, self.source.google_news_feed)
+
+    def test_only_google_rss_article_links_are_accepted(self):
+        for url in ("https://news.google.com/other", "https://evil.example/rss/articles/token",
+                    "https://news.google.com.evil.example/rss/articles/token",
+                    "http://news.google.com/rss/articles/token",
+                    "https://news.google.com:9000/rss/articles/token"):
+            with self.subTest(url=url), self.assertRaises(FeedError):
+                parse_feed(self.feed().replace(self.article_url.encode(), url.encode()),
+                           self.source, self.source.google_news_feed)
+        with self.assertRaises(FeedError):
+            parse_feed(self.feed(), self.source, self.source.feeds[0])
+
+    def test_direct_feed_is_preferred_and_fallback_reports_provenance(self):
+        calls = []
+
+        def direct(url, source):
+            calls.append(url)
+            return rss([item(domain=source.domain), item(25, domain=source.domain)])
+
+        articles, status = collect_source(self.source, NOW, direct)
+        self.assertEqual(calls, [self.source.feeds[0]])
+        self.assertNotIn("via", articles[0])
+        self.assertEqual(status["status"], "ok")
+
+        def fallback(url, source):
+            if url in source.feeds:
+                raise FeedError("HTTP Error 403: Forbidden")
+            return self.feed()
+
+        with self.assertLogs("mynews", level="WARNING"):
+            articles, status = collect_source(self.source, NOW, fallback)
+        self.assertEqual(articles[0]["via"], "google_news")
+        self.assertEqual(status["status"], "partial")
+        self.assertIn("Google News", status["error"])
+
+    def test_both_feeds_failing_is_an_error(self):
+        def fail(*_):
+            raise FeedError("Unavailable")
+
+        with self.assertLogs("mynews"), self.assertRaises(FeedError):
+            collect_source(self.source, NOW, fail)
+
+    def test_google_articles_survive_cache_outage_and_expire(self):
+        recent = parse_feed(self.feed(), self.source, self.source.google_news_feed)[0][0]
+        expired = {**recent, "published_at": iso_date(NOW - timedelta(hours=25))}
+
+        def fail(*_):
+            raise FeedError("Unavailable")
+
+        with self.assertLogs("mynews"):
+            data = aggregate(NOW, {"articles": [recent, expired], "sources": []}, fail)
+        self.assertEqual(data["articles"], [recent])
+
+    def test_fetch_allows_only_configured_google_feed_redirect(self):
+        class Response:
+            def __init__(self, url):
+                self.url = url
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def read(self, _):
+                return b"<rss/>"
+
+        with patch("scripts.aggregate.urlopen", return_value=Response(self.source.google_news_feed)):
+            self.assertEqual(fetch_feed(self.source.google_news_feed, self.source), b"<rss/>")
+        for url in ("https://news.google.com/rss/search?q=other", "https://evil.example/rss"):
+            with self.subTest(url=url), patch("scripts.aggregate.urlopen", return_value=Response(url)), self.assertRaises(FeedError):
+                fetch_feed(self.source.google_news_feed, self.source)
 
 
 if __name__ == "__main__":

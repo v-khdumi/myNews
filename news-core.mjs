@@ -44,6 +44,11 @@ export function validArticle(article) {
   if (typeof article.published_at !== "string" || !Number.isFinite(Date.parse(article.published_at))) return false;
   try {
     const url = new URL(article.url);
+    if (article.via === "google_news") {
+      return source.id === "stiripesurse" && url.protocol === "https:"
+        && url.hostname === "news.google.com" && !url.username && !url.password && !url.port
+        && /^\/rss\/articles\/[A-Za-z0-9_-]+$/.test(url.pathname);
+    }
     return url.protocol === "https:" && !url.username && !url.password
       && (url.hostname === source.domain || url.hostname === `www.${source.domain}`);
   } catch {

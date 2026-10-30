@@ -203,7 +203,7 @@ class CollectionTests(unittest.TestCase):
     def test_all_nine_publishers_are_configured_and_collected(self):
         self.assertEqual({source.id for source in SOURCES}, {
             "hotnews", "g4media", "mediafax", "digi24", "descopera",
-            "biziday", "zonait", "go4it", "playtech",
+            "biziday", "zonait", "go4it", "stiripesurse",
         })
         for source in SOURCES:
             with self.subTest(source=source.id):
@@ -292,9 +292,17 @@ class CollectionTests(unittest.TestCase):
         self.assertIn("limita", status["error"])
 
     def test_non_paginated_feed_reports_limited_coverage(self):
-        source = next(source for source in SOURCES if source.id == "digi24")
-        _, status = collect_source(source, NOW, lambda *_: rss([item(domain=source.domain)]))
-        self.assertEqual(status["status"], "partial")
+        for source in (source for source in SOURCES if source.id in {"digi24", "stiripesurse"}):
+            with self.subTest(source=source.id):
+                calls = []
+
+                def fetch(url, selected):
+                    calls.append(url)
+                    return rss([item(domain=selected.domain)])
+
+                _, status = collect_source(source, NOW, fetch)
+                self.assertEqual(status["status"], "partial")
+                self.assertEqual(calls, [source.feeds[0]])
 
     def test_invalid_items_reported(self):
         _, status = collect_source(SOURCE, NOW, lambda *_: rss([item(25), ("Bad", "", "")]))
@@ -329,6 +337,21 @@ class AggregationTests(unittest.TestCase):
         self.assertEqual([article["url"] for article in data["articles"]], ["https://hotnews.ro/cached"])
         self.assertTrue(all(source["status"] == "error" for source in data["sources"]))
         self.assertEqual(data["sources"][0]["last_success_at"], previous["sources"][0]["last_success_at"])
+
+    def test_removed_publisher_is_not_retained_from_cache(self):
+        previous = {
+            "sources": [{"id": "playtech", "last_success_at": iso_date(NOW)}],
+            "articles": [{
+                **self.article(1, "removed"),
+                "source": "playtech", "url": "https://playtech.ro/removed",
+            }],
+        }
+        data = aggregate(NOW, previous, lambda url, source: rss([
+            item(1, domain=source.domain), item(25, domain=source.domain),
+        ]))
+        self.assertNotIn("playtech", {source["id"] for source in data["sources"]})
+        self.assertEqual({article["source"] for article in data["articles"]},
+                         {source.id for source in SOURCES})
 
     def test_cached_articles_survive_feed_rotation_and_are_deduplicated(self):
         previous = {"sources": [], "articles": [self.article(3, "cached"), self.article(2, "fresh")]}

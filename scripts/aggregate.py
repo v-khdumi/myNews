@@ -44,7 +44,7 @@ SOURCES = (
     Source("biziday", "Biziday", "biziday.ro", ("https://www.biziday.ro/feed",)),
     Source("zonait", "Zona IT", "zonait.ro", ("https://zonait.ro/feed",)),
     Source("go4it", "Go4it", "go4it.ro", ("https://www.go4it.ro/feed", "https://www.go4it.ro/rss")),
-    Source("playtech", "Playtech", "playtech.ro", ("https://playtech.ro/feed",)),
+    Source("stiripesurse", "Știripesurse.ro", "stiripesurse.ro", ("https://www.stiripesurse.ro/rss/stiri.xml",), paginated=False),
 )
 
 

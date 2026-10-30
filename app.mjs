@@ -59,6 +59,7 @@ function openArticle(article) {
   document.documentElement.classList.add("reader-open");
   if (!$("#article-reader").open) $("#article-reader").showModal();
   $("#article-reader").scrollTop = 0;
+  $(".reader-content").scrollTop = 0;
   $("#close-reader").focus({ preventScroll: true });
 }
 

@@ -18,22 +18,20 @@ jobs:
           from concurrent.futures import ThreadPoolExecutor
           from urllib.request import Request, urlopen
           from urllib.error import HTTPError, URLError
-          from scripts.aggregate import SOURCES, parse_feed
-          source = next(s for s in SOURCES if s.id == "stiripesurse")
+          import xml.etree.ElementTree as ET
           endpoints = [
-              "https://www.stiripesurse.ro/rss/stiri.xml",
-              "https://stiripesurse.ro/rss/stiri.xml",
-              "https://www.stiripesurse.ro/rss/stirile-zilei.xml",
+              "https://news.google.com/rss/search?q=site%3Astiripesurse.ro+when%3A1d&hl=ro&gl=RO&ceid=RO%3Aro",
           ]
-          agents = ["myNews-RSS/1.0 (GitHub Pages headline aggregator)", "Python-urllib/3.12"]
+          agents = ["myNews-RSS/1.0 (GitHub Pages headline aggregator)"]
           def check(pair):
               url, agent = pair
               request = Request(url, headers={"User-Agent": agent, "Accept": "application/rss+xml, application/xml, text/xml;q=0.9"})
               try:
                   with urlopen(request, timeout=20) as response:
                       body = response.read(8 * 1024 * 1024)
-                      articles = parse_feed(body, source, response.url)[0]
-                      return f"{url} | {agent} | HTTP {response.status} | articles={len(articles)}"
+                      root = ET.fromstring(body)
+                      items = root.findall(".//item")
+                      return f"{url} | HTTP {response.status} | items={len(items)} | first={ET.tostring(items[0], encoding='unicode')[:2500] if items else 'none'}"
               except HTTPError as error:
                   return f"{url} | {agent} | HTTP {error.code} | headers={dict(error.headers)} | body={error.read(1500)!r}"
               except Exception as error:

@@ -1,4 +1,4 @@
-name: RSS connectivity diagnostic
+name: RSS integration verification
 
 on:
   workflow_dispatch:
@@ -7,36 +7,46 @@ permissions:
   contents: read
 
 jobs:
-  diagnose:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Check public RSS endpoints without deploying
+        with:
+          ref: copilot/fix-stiripesurse-feed
+      - name: Run regression tests
+        run: |
+          python -m unittest discover -s tests -p 'test_*.py'
+          node --test tests/*.test.mjs
+      - name: Verify live fallback and edition contract
         run: |
           python - <<'PY'
-          from concurrent.futures import ThreadPoolExecutor
-          from urllib.request import Request, urlopen
-          from urllib.error import HTTPError, URLError
-          import xml.etree.ElementTree as ET
-          endpoints = [
-              "https://news.google.com/rss/search?q=site%3Astiripesurse.ro+when%3A1d&hl=ro&gl=RO&ceid=RO%3Aro",
-          ]
-          agents = ["myNews-RSS/1.0 (GitHub Pages headline aggregator)"]
-          def check(pair):
-              url, agent = pair
-              request = Request(url, headers={"User-Agent": agent, "Accept": "application/rss+xml, application/xml, text/xml;q=0.9"})
-              try:
-                  with urlopen(request, timeout=20) as response:
-                      body = response.read(8 * 1024 * 1024)
-                      root = ET.fromstring(body)
-                      items = root.findall(".//item")
-                      return f"{url} | HTTP {response.status} | items={len(items)} | first={ET.tostring(items[0], encoding='unicode')[:2500] if items else 'none'}"
-              except HTTPError as error:
-                  return f"{url} | {agent} | HTTP {error.code} | headers={dict(error.headers)} | body={error.read(1500)!r}"
-              except Exception as error:
-                  return f"{url} | {agent} | {type(error).__name__}: {error}"
-          with ThreadPoolExecutor(max_workers=6) as pool:
-              for result in pool.map(check, [(url, agent) for url in endpoints for agent in agents]):
-                  print(result)
+          from datetime import datetime, timezone
+          import json
+          from pathlib import Path
+          from scripts.aggregate import SOURCES, collect_source, iso_date
+          source = next(s for s in SOURCES if s.id == "stiripesurse")
+          now = datetime.now(timezone.utc)
+          articles, status = collect_source(source, now)
+          assert articles, "No valid recent headlines collected"
+          assert all(a["via"] == "google_news" and a["title"] for a in articles)
+          assert status["status"] == "partial" and "Google News" in status["error"]
+          print(f"VERIFIED: {len(articles)} valid recent Stiripesurse headlines via Google News")
+          Path("rss-check.json").write_text(json.dumps({
+              "generated_at": iso_date(now), "window_hours": 24,
+              "sources": [status], "articles": articles,
+          }, ensure_ascii=False), encoding="utf-8")
           PY
+          node --input-type=module - <<'JS'
+          import {readFileSync} from 'node:fs';
+          import {validateEdition, currentArticles, selectArticles} from './news-core.mjs';
+          const edition = validateEdition(JSON.parse(readFileSync('rss-check.json', 'utf8')));
+          const articles = selectArticles(edition.articles, {source: 'stiripesurse'});
+          if (!articles.length) throw new Error('No recent articles accepted by the client');
+          console.log(`VERIFIED: ${articles.length} headlines accepted by client validation and source filter`);
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rss-check
+          path: rss-check.json
+          retention-days: 1

@@ -200,10 +200,11 @@ class PreviewTests(unittest.TestCase):
 
 
 class CollectionTests(unittest.TestCase):
-    def test_all_nine_publishers_are_configured_and_collected(self):
+    def test_local_and_worldwide_publishers_are_configured_and_collected(self):
         self.assertEqual({source.id for source in SOURCES}, {
             "hotnews", "g4media", "mediafax", "digi24", "descopera",
             "biziday", "zonait", "go4it", "stiripesurse",
+            "guardian", "france24", "aljazeera",
         })
         for source in SOURCES:
             with self.subTest(source=source.id):
@@ -215,6 +216,8 @@ class CollectionTests(unittest.TestCase):
                 self.assertEqual(len(articles), 1)
                 self.assertEqual(articles[0]["source"], source.id)
                 self.assertEqual(status["status"], "ok")
+                self.assertEqual(articles[0]["region"], source.region)
+                self.assertEqual(articles[0]["original_language"], source.language)
 
     def test_exact_24_hour_window_no_future_or_old(self):
         body = rss([item(0, slug="now"), item(24, slug="boundary"),
@@ -393,6 +396,19 @@ class AggregationTests(unittest.TestCase):
             result = aggregate(NOW, {"sources": [], "articles": [cached]}, fail)["articles"][0]
         for key in ("excerpt", "image_url", "image_credit"):
             self.assertEqual(result[key], cached[key])
+
+    def test_unchanged_input_preserves_synthesis_but_changed_input_invalidates_it(self):
+        def fetch(url, source):
+            return rss([item(domain=source.domain), item(25, slug="old", domain=source.domain)])
+        initial = aggregate(NOW, fetcher=fetch)
+        cached = next(article for article in initial["articles"] if article["source"] == SOURCE.id)
+        cached["synthesis"] = {"test": "cached paid output"}
+        same = aggregate(NOW, initial, fetcher=fetch)
+        self.assertEqual(same["articles"][0]["synthesis"], cached["synthesis"])
+        changed = aggregate(NOW, initial, fetcher=lambda url, source: rss([
+            item(title="Changed input", domain=source.domain), item(25, slug="old", domain=source.domain),
+        ]))
+        self.assertNotIn("synthesis", changed["articles"][0])
 
     def test_all_failed_does_not_overwrite_existing_file(self):
         with tempfile.TemporaryDirectory() as directory:

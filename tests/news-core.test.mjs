@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { currentArticles, DAY_MS, normalizeSearch, relativeTime, safeImageUrl, selectArticles, SOURCES, validArticle, validateEdition } from "../news-core.mjs";
+import { execFileSync } from "node:child_process";
+import { articleText, categoryOf, currentArticles, DAY_MS, normalizeSearch, relativeTime, safeImageUrl, selectArticles, SOURCES, validArticle, validateEdition } from "../news-core.mjs";
 
 const now = Date.parse("2026-10-28T22:30:00Z");
 function article(hours, overrides = {}) {
@@ -75,9 +76,10 @@ test("old editions without image and excerpt fields remain compatible", () => {
   assert.equal(safeImageUrl(article(1).image_url), null);
 });
 
-test("all nine sources accept their own links and are individually filterable", () => {
+test("all local and worldwide sources accept their own links and are individually filterable", () => {
   assert.deepEqual(SOURCES.map((source) => source.id), [
     "hotnews", "g4media", "mediafax", "digi24", "descopera", "biziday", "zonait", "go4it", "stiripesurse",
+    "guardian", "france24", "aljazeera",
   ]);
   const articles = SOURCES.map((source) => article(1, {
     source: source.id, url: `${source.homepage}/article`,
@@ -88,6 +90,13 @@ test("all nine sources accept their own links and are individually filterable", 
     assert.equal(result[0].source, source.id);
     assert.equal(validArticle(article(1, { source: source.id, url: "https://unrelated.example/article" })), false);
   }
+});
+
+test("the frontend and collector share the same publisher allowlist and regions", () => {
+  const collected = JSON.parse(execFileSync("python", ["-c",
+    "import json; from scripts.aggregate import SOURCES; print(json.dumps([{'id': s.id, 'domain': s.domain, 'region': s.region, 'language': s.language} for s in SOURCES]))",
+  ], { cwd: new URL("..", import.meta.url), encoding: "utf8" }));
+  assert.deepEqual(SOURCES.map(({ id, domain, region = "romania", language = "ro" }) => ({ id, domain, region, language })), collected);
 });
 
 test("replacement publisher accepts both hostnames and removed publisher is rejected", () => {
@@ -104,8 +113,8 @@ test("old four-source editions retain news and show new sources as pending", () 
     sources: SOURCES.slice(0, 4).map(({ id }) => ({ id, status: "ok" })),
   };
   const edition = validateEdition(old);
-  assert.equal(edition.sources.length, 9);
-  assert.equal(edition.sources.filter(({ status }) => status === "pending").length, 5);
+  assert.equal(edition.sources.length, SOURCES.length);
+  assert.equal(edition.sources.filter(({ status }) => status === "pending").length, SOURCES.length - 4);
   assert.deepEqual(edition.articles, old.articles);
   assert.equal(old.sources.length, 4);
 });
@@ -114,7 +123,7 @@ test("invalid editions still fail explicitly", () => {
   const base = {
     generated_at: null, articles: [], sources: SOURCES.map(({ id }) => ({ id, status: "pending" })),
   };
-  assert.equal(validateEdition(base).sources.length, 9);
+  assert.equal(validateEdition(base).sources.length, SOURCES.length);
   for (const overrides of [
     { sources: [] }, { sources: [null] },
     { sources: [{ id: "hotnews", status: "ok" }, { id: "hotnews", status: "ok" }] },
@@ -124,4 +133,43 @@ test("invalid editions still fail explicitly", () => {
   ]) {
     assert.throws(() => validateEdition({ ...base, ...overrides }), /Formatul ediției/);
   }
+});
+
+function bilingual(overrides = {}) {
+  const entry = article(1, overrides);
+  entry.synthesis = {
+    ro: { title: "O nouă perspectivă", summary: "Sinteză despre tehnologie." },
+    en: { title: "A new perspective", summary: "A digest about technology." },
+    category: "technology", model: "test-model", generated_at: new Date(now).toISOString(), source_url: entry.url,
+  };
+  return entry;
+}
+
+test("bilingual editions switch both title and summary and retain original source", () => {
+  const entry = bilingual();
+  assert.equal(articleText(entry, "en").title, "A new perspective");
+  assert.equal(articleText(entry, "ro").summary, "Sinteză despre tehnologie.");
+  assert.equal(articleText(entry).ai, true);
+  assert.equal(categoryOf(entry), "technology");
+  entry.synthesis.source_url = "https://evil.test/";
+  assert.equal(articleText(entry).ai, false);
+  assert.equal(articleText(entry).title, entry.title);
+});
+
+test("region, category, AI-only and translated search combine correctly", () => {
+  const entries = [bilingual(), article(2, { source: "guardian", url: "https://www.theguardian.com/world/test", title: "World news" })];
+  assert.equal(selectArticles(entries, { region: "romania", category: "technology", aiOnly: true, language: "en", query: "digest", now }).length, 1);
+  assert.equal(selectArticles(entries, { region: "world", aiOnly: true, now }).length, 0);
+  assert.equal(selectArticles(entries, { region: "world", now })[0].source, "guardian");
+  assert.equal(articleText(entries[1], "ro").language, "en");
+  assert.equal(articleText(entries[1], "ro").ai, false);
+});
+
+test("invalid AI metadata cannot masquerade as an AI digest", () => {
+  for (const change of [{ model: null }, { generated_at: "invalid" }, { en: { title: "", summary: "x" } }]) {
+    const entry = bilingual();
+    Object.assign(entry.synthesis, change);
+    assert.equal(articleText(entry, "en").ai, false);
+  }
+  assert.equal(relativeTime(article(3).published_at, now, "en"), "3 h ago");
 });

@@ -19,6 +19,11 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
+if __package__:
+    from .synthesize import enrich_edition
+else:
+    from synthesize import enrich_edition
+
 UTC = timezone.utc
 MAX_FEED_BYTES = 8 * 1024 * 1024
 MAX_PAGES = 40
@@ -33,6 +38,8 @@ class Source:
     domain: str
     feeds: tuple[str, ...]
     paginated: bool = True
+    region: str = "romania"
+    language: str = "ro"
 
 
 SOURCES = (
@@ -45,7 +52,27 @@ SOURCES = (
     Source("zonait", "Zona IT", "zonait.ro", ("https://zonait.ro/feed",)),
     Source("go4it", "Go4it", "go4it.ro", ("https://www.go4it.ro/feed", "https://www.go4it.ro/rss")),
     Source("stiripesurse", "Știripesurse.ro", "stiripesurse.ro", ("https://www.stiripesurse.ro/rss/stiri.xml",), paginated=False),
+    Source("guardian", "The Guardian", "theguardian.com", ("https://www.theguardian.com/world/rss",), paginated=False, region="world", language="en"),
+    Source("france24", "France 24", "france24.com", ("https://www.france24.com/en/rss",), paginated=False, region="world", language="en"),
+    Source("aljazeera", "Al Jazeera", "aljazeera.com", ("https://www.aljazeera.com/xml/rss/all.xml",), paginated=False, region="world", language="en"),
 )
+
+CATEGORY_KEYWORDS = {
+    "technology": ("tehnolog", "technology", "artificial intelligence", "inteligență artificială", "software", "gadget"),
+    "science": ("știin", "science", "space", "sănătate", "health", "medicin"),
+    "business": ("econom", "business", "financ", "market", "afaceri"),
+    "sport": ("sport", "fotbal", "football", "tenis", "tennis"),
+    "culture": ("cultur", "culture", "film", "music", "artă"),
+    "politics": ("politic", "election", "alegeri", "guvern", "parlament"),
+}
+
+
+def article_category(item, source):
+    categories = " ".join(node.text or "" for node in item if local_name(node.tag) == "category").casefold()
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        if any(keyword in categories for keyword in keywords):
+            return category
+    return {"zonait": "technology", "go4it": "technology", "descopera": "science"}.get(source.id, "general")
 
 
 class FeedError(Exception):
@@ -232,6 +259,9 @@ def parse_feed(body, source, base_url):
             "title": title,
             "url": url,
             "published_at": iso_date(published),
+            "region": source.region,
+            "original_language": source.language,
+            "category": article_category(item, source),
             **preview_metadata(item, url),
         })
     next_url = None
@@ -248,7 +278,7 @@ def parse_feed(body, source, base_url):
 
 def fetch_feed(url, source):
     request = Request(url, headers={
-        "User-Agent": "myNews-RSS/1.0 (GitHub Pages headline aggregator)",
+        "User-Agent": "myNews-RSS/2.0 (attributed news aggregator)",
         "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9",
     })
     for attempt in range(2):
@@ -371,7 +401,14 @@ def aggregate(now, previous=None, fetcher=fetch_feed):
     statuses = []
     for fresh, status in results:
         statuses.append(status)
-        articles.update((article["id"], article) for article in fresh)
+        for article in fresh:
+            cached = articles.get(article["id"], {})
+            # Keep paid synthesis only when its input is unchanged.
+            if cached.get("title") == article["title"] and cached.get("excerpt", "") == article["excerpt"]:
+                for field in ("synthesis", "ai_error"):
+                    if field in cached:
+                        article[field] = cached[field]
+            articles[article["id"]] = article
     return {
         "generated_at": iso_date(now),
         "window_hours": 24,
@@ -399,6 +436,7 @@ def main():
     if all(source["status"] == "error" for source in data["sources"]) and not data["articles"]:
         LOG.error("Nicio sursă nu este disponibilă și nu există articole recente în cache; publicarea este oprită.")
         raise SystemExit(1)
+    enrich_edition(data)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.output.with_suffix(".tmp")
     temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

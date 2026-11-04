@@ -15,7 +15,9 @@
     const button = document.querySelector("#theme-toggle");
     if (!button) return;
     button.setAttribute("aria-checked", String(theme === "night"));
-    button.title = theme === "night" ? "Tema Noapte este activă. Comută la Zi." : "Tema Zi este activă. Comută la Noapte.";
+    button.title = root.lang === "en"
+      ? (theme === "night" ? "Night theme is active. Switch to day." : "Day theme is active. Switch to night.")
+      : (theme === "night" ? "Tema Noapte este activă. Comută la Zi." : "Tema Zi este activă. Comută la Noapte.");
   }
 
   applyTheme();

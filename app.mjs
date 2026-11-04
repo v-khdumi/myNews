@@ -1,11 +1,21 @@
-import { currentArticles, relativeTime, safeImageUrl, selectArticles, SOURCES, validateEdition } from "./news-core.mjs";
+import { articleText, categoryOf, CATEGORIES, currentArticles, relativeTime, safeImageUrl, selectArticles, SOURCES, validateEdition } from "./news-core.mjs";
+import { messages } from "./i18n.mjs";
 
 const $ = (selector) => document.querySelector(selector);
-const pageSize = 24;
-const state = { data: null, source: "all", query: "", sort: "newest", limit: pageSize, loading: false, error: "" };
-const fullDate = new Intl.DateTimeFormat("ro-RO", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Bucharest" });
-const shortDate = new Intl.DateTimeFormat("ro-RO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bucharest" });
-let readerArticleUrl = null;
+const pageSize = 12;
+let language = "ro";
+try {
+  if (localStorage.getItem("mynews-language") === "en") language = "en";
+} catch (error) {
+  console.warn("Language preference could not be read:", error);
+}
+const state = { data: null, source: "all", query: "", sort: "newest", region: "all", category: "all", aiOnly: false, language, limit: pageSize, loading: false, error: false };
+let readerArticle = null;
+let returnFocus = null;
+const t = () => messages[state.language];
+const date = (value, full = false) => new Intl.DateTimeFormat(state.language === "ro" ? "ro-RO" : "en-GB", {
+  dateStyle: full ? "long" : "medium", timeStyle: "short", timeZone: "Europe/Bucharest",
+}).format(new Date(value));
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -14,7 +24,7 @@ function element(tag, className, text) {
   return node;
 }
 
-function articleImage(article, { thumbnail = false } = {}) {
+function imageFor(article, thumbnail = false) {
   const url = safeImageUrl(article.image_url);
   if (!url) return null;
   const container = element("div", "article-image");
@@ -23,10 +33,10 @@ function articleImage(article, { thumbnail = false } = {}) {
   image.loading = thumbnail ? "lazy" : "eager";
   image.decoding = "async";
   image.referrerPolicy = "no-referrer";
-  const fallback = element("span", "image-unavailable", "Imagine indisponibilă");
+  const fallback = element("span", "image-unavailable", t().unavailableImage);
   fallback.hidden = true;
   image.addEventListener("error", () => {
-    console.warn("Imaginea știrii nu a putut fi încărcată:", url);
+    console.warn("Publisher image unavailable:", url);
     image.hidden = true;
     fallback.hidden = false;
   }, { once: true });
@@ -35,80 +45,118 @@ function articleImage(article, { thumbnail = false } = {}) {
   return container;
 }
 
-function openArticle(article) {
+function renderReader() {
+  const article = readerArticle;
+  if (!article) return;
   const source = SOURCES.find((entry) => entry.id === article.source);
-  readerArticleUrl = article.url;
-  $("#reader-title").textContent = article.title;
-  $("#reader-meta").textContent = `${source.name} · ${fullDate.format(new Date(article.published_at))}`;
-  $("#reader-excerpt").textContent = typeof article.excerpt === "string" && article.excerpt.trim()
-    ? article.excerpt
-    : "Sursa nu oferă un extras în fluxul RSS pentru această știre. Poți citi articolul complet folosind linkul de mai jos.";
-  const image = articleImage(article);
+  const text = articleText(article, state.language);
+  $("#reader-kind").textContent = text.ai ? t().aiBadge : t().rssBadge;
+  $("#reader-title").textContent = text.title;
+  $("#reader-title").lang = text.language;
+  $("#reader-meta").textContent = `${source.name} · ${date(article.published_at, true)}`;
+  $("#reader-excerpt").textContent = text.summary || t().noExcerpt;
+  $("#reader-excerpt").lang = text.summary ? text.language : state.language;
   $("#reader-image").replaceChildren();
+  const image = imageFor(article);
   if (image) {
     const figure = element("figure");
-    const credit = typeof article.image_credit === "string" && article.image_credit.trim()
-      ? `Credit imagine (RSS): ${article.image_credit}`
-      : `Imagine asociată în fluxul RSS ${source.name}.`;
+    const credit = article.image_credit ? `${t().imageCredit}: ${article.image_credit}` : `${t().imageFrom} ${source.name}.`;
     figure.append(image, element("figcaption", "", credit));
     $("#reader-image").append(figure);
   }
+  $("#reader-provenance").textContent = text.ai
+    ? `${t().model}: ${article.synthesis.model} · ${t().generated}: ${date(article.synthesis.generated_at)}\n${t().originalTitle}: ${article.title}`
+    : `${t().originalLanguage}: ${text.language.toUpperCase()}`;
+  $("#reader-note").textContent = text.ai ? t().aiNote : t().rssNote;
   $("#reader-source").href = article.url;
-  $("#reader-source").textContent = `Citește articolul integral la ${source.name} ↗`;
-  $("#reader-source").setAttribute("aria-label", `Citește articolul integral la ${source.name} (filă nouă)`);
+  $("#reader-source").textContent = `${t().readSource} · ${source.name} ↗`;
+  $("#reader-source").setAttribute("aria-label", `${t().readSource}: ${source.name} (${t().newTab})`);
+}
+
+function openArticle(article) {
+  returnFocus = document.activeElement;
+  readerArticle = article;
+  renderReader();
   document.documentElement.classList.add("reader-open");
-  if (!$("#article-reader").open) $("#article-reader").showModal();
+  $("#article-reader").showModal();
   $("#article-reader").scrollTop = 0;
-  $(".reader-content").scrollTop = 0;
   $("#close-reader").focus({ preventScroll: true });
 }
 
-function articleCard(article, now) {
+function articleCard(article, now, index) {
   const source = SOURCES.find((entry) => entry.id === article.source);
-  const card = element("article", `news-card ${source.id}`);
+  const text = articleText(article, state.language);
+  const card = element("article", `news-card${index === 0 ? " lead-card" : ""}`);
   card.dataset.url = article.url;
-  card.addEventListener("click", (event) => {
-    if (event.target.closest("a")) return;
-    openArticle(article);
-  });
-  const image = articleImage(article, { thumbnail: true });
-  if (image) {
-    card.classList.add("has-image");
-    const imageButton = element("button", "card-image-button");
-    imageButton.type = "button";
-    imageButton.setAttribute("aria-label", `Previzualizează: ${article.title}`);
-    imageButton.setAttribute("aria-haspopup", "dialog");
-    imageButton.append(image);
-    card.append(imageButton);
+  const image = imageFor(article, index !== 0);
+  const media = element("button", `card-media${image ? "" : " no-image"}`);
+  media.type = "button";
+  media.setAttribute("aria-label", `${t().preview}: ${text.title}`);
+  media.setAttribute("aria-haspopup", "dialog");
+  if (image) media.append(image);
+  else {
+    media.append(element("span", "placeholder-category", t().categories[categoryOf(article)]),
+      element("span", "placeholder-mark", source.name), element("span", "placeholder-arrow", "↗"));
   }
+  media.addEventListener("click", () => openArticle(article));
+  const body = element("div", "card-body");
   const meta = element("div", "card-meta");
-  const publisher = element("span", "publisher");
-  const dot = element("span", "source-dot");
-  dot.setAttribute("aria-hidden", "true");
-  publisher.append(dot, source.name);
-  const time = element("time", "", relativeTime(article.published_at, now));
-  time.dateTime = article.published_at;
-  time.title = fullDate.format(new Date(article.published_at));
-  meta.append(publisher, time);
-
+  meta.append(element("span", "category-label", t().categories[categoryOf(article)]),
+    element("span", text.ai ? "ai-badge" : "rss-badge", text.ai ? `✦ ${t().aiBadge}` : `${t().originalLanguage} · ${text.language.toUpperCase()}`));
   const heading = element("h3");
-  const title = element("button", "article-title", article.title);
+  const title = element("button", "article-title", text.title);
+  title.lang = text.language;
   title.type = "button";
   title.setAttribute("aria-haspopup", "dialog");
+  title.addEventListener("click", () => openArticle(article));
   heading.append(title);
+  const excerpt = element("p", "card-excerpt", text.summary || t().noExcerpt);
+  excerpt.lang = text.summary ? text.language : state.language;
   const bottom = element("div", "card-bottom");
-  const date = element("span", "", shortDate.format(new Date(article.published_at)));
-  const link = element("a", "read-link", "Citește la sursă");
+  const publisher = element("span", "publisher", source.name);
+  const time = element("time", "", relativeTime(article.published_at, now, state.language));
+  time.dateTime = article.published_at;
+  time.title = date(article.published_at);
+  const link = element("a", "source-link", "↗");
   link.href = article.url;
   link.target = "_blank";
   link.rel = "noopener noreferrer";
-  link.setAttribute("aria-label", `Citește la ${source.name}: ${article.title} (filă nouă)`);
-  const arrow = element("b", "", "↗");
-  arrow.setAttribute("aria-hidden", "true");
-  link.append(arrow);
-  bottom.append(date, link);
-  card.append(meta, heading, bottom);
+  link.setAttribute("aria-label", `${t().readSource}: ${source.name} (${t().newTab})`);
+  bottom.append(publisher, time, link);
+  body.append(meta, heading, excerpt, bottom);
+  card.append(media, body);
   return card;
+}
+
+function localize() {
+  document.documentElement.lang = state.language;
+  document.title = `myNews — ${t().heroAccent}`;
+  document.querySelectorAll("[data-i18n]").forEach((node) => { node.textContent = t()[node.dataset.i18n]; });
+  document.querySelectorAll("[data-i18n-aria]").forEach((node) => { node.setAttribute("aria-label", t()[node.dataset.i18nAria]); });
+  $("#search").placeholder = t().searchPlaceholder;
+  $("#theme-toggle").setAttribute("aria-label", t().darkTheme);
+  $("#theme-toggle").title = t().darkTheme;
+  document.querySelectorAll("[data-language]").forEach((node) => {
+    node.setAttribute("aria-pressed", String(node.dataset.language === state.language));
+  });
+  $("#source").replaceChildren(...[{ id: "all", name: t().allSources }, ...SOURCES].map((source) => {
+    const option = element("option", "", source.name);
+    option.value = source.id;
+    return option;
+  }));
+  $("#source").value = state.source;
+  $("#category-filters").replaceChildren(...["all", ...CATEGORIES].map((category) => {
+    const button = element("button", "category-filter", t().categories[category]);
+    button.type = "button";
+    button.dataset.category = category;
+    button.addEventListener("click", () => {
+      state.category = category;
+      state.limit = pageSize;
+      render();
+    });
+    return button;
+  }));
+  renderReader();
 }
 
 function renderSources() {
@@ -119,14 +167,13 @@ function renderSources() {
     link.href = source.homepage;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    let text = "în așteptarea primei actualizări";
-    if (status?.status === "ok") text = "actualizat";
-    if (status?.status === "partial") text = `acoperire limitată — ${status.error}`;
-    if (status?.status === "error") text = `indisponibil temporar — ${status.error}`;
+    const label = element("span", `status-${status?.status || "pending"}`, t().sourceStates[status?.status || "pending"]);
+    item.append(link, label);
     if (status?.last_success_at && Number.isFinite(Date.parse(status.last_success_at))) {
-      text += `; ultima preluare reușită: ${fullDate.format(new Date(status.last_success_at))}`;
+      item.append(element("small", "", date(status.last_success_at)));
     }
-    item.append(link, `: ${text}.`);
+    // Technical source diagnostics are preserved verbatim from the collector.
+    if (status?.error) item.append(element("small", "source-diagnostic", status.error));
     return item;
   }));
 }
@@ -135,67 +182,73 @@ function render() {
   const now = Date.now();
   const articles = currentArticles(state.data?.articles ?? [], now);
   const selected = selectArticles(articles, { ...state, now });
-  const shown = selected.slice(0, state.limit);
-  const focusedArticle = document.activeElement?.closest(".news-card");
-  const focusedUrl = focusedArticle?.dataset.url;
-  const focusedClass = focusedArticle ? document.activeElement.className : null;
-  $("#news").replaceChildren(...shown.map((article) => articleCard(article, now)));
+  const active = document.activeElement;
+  const focusedUrl = active?.closest(".news-card")?.dataset.url;
+  const focusedClass = active?.className;
+  $("#news").replaceChildren(...selected.slice(0, state.limit).map((article, index) => articleCard(article, now, index)));
   if (focusedUrl) {
     const card = Array.from($("#news").children).find((entry) => entry.dataset.url === focusedUrl);
-    Array.from(card?.querySelectorAll("button, a") ?? []).find((entry) => entry.className === focusedClass)?.focus({ preventScroll: true });
+    (Array.from(card?.querySelectorAll("button, a") ?? []).find((node) => node.className === focusedClass) ?? $("#news")).focus({ preventScroll: true });
   }
   $("#news").setAttribute("aria-busy", String(state.loading));
-  $("#result-count").textContent = `${selected.length} ${selected.length === 1 ? "știre" : "știri"}`;
-  document.querySelectorAll("[data-count]").forEach((counter) => {
-    counter.textContent = counter.dataset.count === "all"
-      ? articles.length
-      : articles.filter((article) => article.source === counter.dataset.count).length;
+  $("#result-count").textContent = `${selected.length} ${selected.length === 1 ? t().story : t().stories}`;
+  $("#total-count").textContent = articles.length;
+  $("#source-count").textContent = SOURCES.length;
+  $("#today").textContent = new Intl.DateTimeFormat(state.language === "ro" ? "ro-RO" : "en-GB", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Bucharest",
+  }).format(now);
+  document.querySelectorAll("[data-count]").forEach((node) => {
+    node.textContent = articles.filter((article) => node.dataset.count === "all"
+      || (SOURCES.find((entry) => entry.id === article.source)?.region || "romania") === node.dataset.count).length;
   });
-  document.querySelectorAll("[data-source]").forEach((button) => {
-    const active = button.dataset.source === state.source;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", String(active));
-  });
+  for (const key of ["region", "category"]) {
+    document.querySelectorAll(`[data-${key}]`).forEach((button) => {
+      const selected = button.dataset[key] === state[key];
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+  }
   $("#load-more").hidden = state.limit >= selected.length;
   $("#empty").hidden = selected.length > 0;
-  const filtered = state.source !== "all" || state.query.trim();
+  const filtered = state.source !== "all" || state.region !== "all" || state.category !== "all" || state.aiOnly || state.query.trim();
   $("#reset-filters").hidden = !filtered;
-  let title = "Nicio știre în ultimele 24 de ore";
-  let description = "Momentan nu sunt articole recente disponibile. Următoarea actualizare poate aduce știri noi.";
-  if (state.loading && !state.data) {
-    title = "Se încarcă știrile";
-    description = "Citim cea mai recentă ediție.";
-  } else if (state.error && !state.data) {
-    title = "Nu am putut încărca ediția";
-    description = "Verifică conexiunea și apasă „Reîncarcă”. Dacă problema persistă, verifică publicarea din GitHub Actions.";
-  } else if (!state.data?.generated_at) {
-    title = "Prima ediție este în pregătire";
-    description = "Știrile vor apărea după prima rulare reușită a workflow-ului „Actualizează și publică știrile” din GitHub Actions.";
-  } else if (filtered) {
-    title = "Nicio știre pentru aceste filtre";
-    description = "Încearcă alt cuvânt sau alege toate sursele. Căutarea funcționează și fără diacritice.";
-  }
-  $("#empty-title").textContent = title;
-  $("#empty-description").textContent = description;
-
+  const emptyKey = state.loading && !state.data ? "loading" : state.error && !state.data ? "loadError"
+    : !state.data?.generated_at ? "first" : filtered ? "noMatch" : "empty";
+  $("#empty-title").textContent = t()[emptyKey];
+  $("#empty-description").textContent = t()[`${emptyKey}Description`];
   const notices = [];
-  if (state.error) notices.push(state.error);
+  if (state.error) notices.push(t().fetchError);
   if (state.data?.generated_at) {
     const generated = Date.parse(state.data.generated_at);
-    $("#update-status").textContent = `Ediție actualizată: ${shortDate.format(new Date(generated))}`;
-    if (now - generated > 90 * 60000) notices.push("Actualizarea automată întârzie. Sunt afișate doar știrile care încă se încadrează în ultimele 24 de ore.");
-    if (generated > now + 5 * 60000) notices.push("Ora dispozitivului pare diferită de ora ediției. Verifică data și ora dispozitivului.");
-  } else {
-    $("#update-status").textContent = state.loading ? "Se încarcă știrile…" : "În așteptarea primei actualizări";
-  }
-  const unavailable = state.data?.sources.filter((source) => source.status === "error") ?? [];
-  const partial = state.data?.sources.filter((source) => source.status === "partial") ?? [];
-  if (unavailable.length) notices.push(`Surse indisponibile temporar: ${unavailable.map((source) => SOURCES.find((entry) => entry.id === source.id)?.name).join(", ")}. Păstrăm articolele preluate anterior, numai dacă au mai puțin de 24 de ore.`);
-  if (partial.length) notices.push(`Acoperire limitată pentru ${partial.map((source) => SOURCES.find((entry) => entry.id === source.id)?.name).join(", ")}. Vezi detaliile surselor de mai jos.`);
-  $("#notice").hidden = notices.length === 0;
+    $("#update-status").textContent = `${t().updated}: ${date(generated)}`;
+    if (now - generated > 90 * 60000) notices.push(t().stale);
+    if (generated > now + 5 * 60000) notices.push(t().clock);
+  } else $("#update-status").textContent = state.loading ? t().loading : t().waiting;
+  if (state.data?.sources.some((source) => ["error", "partial"].includes(source.status))) notices.push(t().sourceWarning);
+  if (state.data?.ai?.status === "degraded") notices.push(t().aiDegraded);
+  $("#notice").hidden = !notices.length;
   $("#notice").textContent = notices.join(" ");
-  $("#notice").classList.toggle("error", Boolean(state.error));
+  $("#notice").classList.toggle("error", state.error);
   $("#refresh").disabled = state.loading;
+  const ready = articles.filter((article) => articleText(article, state.language).ai).length;
+  const aiCounts = `${ready} ${t().aiReady} · ${articles.length - ready} ${t().aiPending}`;
+  $("#ai-status").textContent = state.data?.ai?.status === "disabled" || !state.data?.ai
+    ? ready ? `${t().aiPaused} ${aiCounts}` : t().aiDisabled
+    : aiCounts;
+  $("#radar").replaceChildren(...articles.slice(0, 4).map((article, index) => {
+    const row = element("li");
+    const text = articleText(article, state.language);
+    const body = element("div");
+    const button = element("button", "", text.title);
+    button.lang = text.language;
+    button.type = "button";
+    button.setAttribute("aria-haspopup", "dialog");
+    button.addEventListener("click", () => openArticle(article));
+    body.append(element("span", "", relativeTime(article.published_at, now, state.language)), button);
+    row.append(element("span", "radar-number", String(index + 1).padStart(2, "0")), body);
+    return row;
+  }));
+  if (!articles.length) $("#radar").append(element("li", "radar-empty", t().noRadar));
   renderSources();
 }
 
@@ -205,51 +258,43 @@ async function loadNews() {
   render();
   try {
     const response = await fetch(new URL("data/news.json", import.meta.url), {
-      cache: "no-store",
-      signal: AbortSignal.timeout(20000),
+      cache: "no-store", signal: AbortSignal.timeout(20000),
     });
-    if (!response.ok) throw new Error(`Serverul a răspuns cu HTTP ${response.status}.`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     state.data = validateEdition(await response.json());
-    state.error = "";
+    state.error = false;
   } catch (error) {
-    console.error("Încărcarea știrilor a eșuat:", error);
-    state.error = "Nu am putut prelua ultima ediție. Reîncearcă folosind butonul „Reîncarcă”.";
+    console.error("News edition could not be loaded:", error);
+    state.error = true;
   } finally {
     state.loading = false;
     render();
   }
 }
 
-for (const source of [{ id: "all", name: "Toate" }, ...SOURCES]) {
-  const button = element("button", `source-filter ${source.id}`);
-  button.type = "button";
-  button.dataset.source = source.id;
-  button.setAttribute("aria-pressed", String(source.id === state.source));
-  if (source.id !== "all") {
-    const dot = element("span", "source-dot");
-    dot.setAttribute("aria-hidden", "true");
-    button.append(dot);
-  }
-  const count = element("span", "filter-count", "0");
-  count.dataset.count = source.id;
-  button.append(source.name, count);
+document.querySelectorAll("[data-language]").forEach((button) => {
   button.addEventListener("click", () => {
-    state.source = source.id;
+    state.language = button.dataset.language;
+    try { localStorage.setItem("mynews-language", state.language); }
+    catch (error) { console.warn("Language preference could not be saved:", error); }
+    localize();
+    render();
+  });
+});
+document.querySelectorAll("[data-region]").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.region = button.dataset.region;
     state.limit = pageSize;
     render();
   });
-  $(".source-filters").append(button);
+});
+for (const [selector, key, event] of [["#search", "query", "input"], ["#source", "source", "change"], ["#sort", "sort", "change"], ["#ai-only", "aiOnly", "change"]]) {
+  $(selector).addEventListener(event, (event) => {
+    state[key] = key === "aiOnly" ? event.target.checked : event.target.value;
+    state.limit = pageSize;
+    render();
+  });
 }
-$("#search").addEventListener("input", (event) => {
-  state.query = event.target.value;
-  state.limit = pageSize;
-  render();
-});
-$("#sort").addEventListener("change", (event) => {
-  state.sort = event.target.value;
-  state.limit = pageSize;
-  render();
-});
 $("#load-more").addEventListener("click", () => {
   const previous = state.limit;
   state.limit += pageSize;
@@ -257,41 +302,29 @@ $("#load-more").addEventListener("click", () => {
   $("#news").children[previous]?.querySelector(".article-title")?.focus({ preventScroll: true });
 });
 $("#reset-filters").addEventListener("click", () => {
-  state.source = "all";
-  state.query = "";
-  state.limit = pageSize;
+  Object.assign(state, { source: "all", region: "all", category: "all", query: "", aiOnly: false, limit: pageSize });
   $("#search").value = "";
+  $("#source").value = "all";
+  $("#ai-only").checked = false;
   render();
   $("#search").focus();
 });
 $("#refresh").addEventListener("click", loadNews);
 $("#close-reader").addEventListener("click", () => $("#article-reader").close());
-$("#article-reader").addEventListener("keydown", (event) => {
-  if (event.key !== "Tab") return;
-  const first = $("#close-reader");
-  const last = $("#reader-source");
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  }
-});
 $("#article-reader").addEventListener("click", (event) => {
   if (event.target !== $("#article-reader")) return;
   const bounds = event.target.getBoundingClientRect();
-  if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) {
-    $("#article-reader").close();
-  }
+  if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) $("#article-reader").close();
 });
 $("#article-reader").addEventListener("close", () => {
   document.documentElement.classList.remove("reader-open");
-  const card = Array.from($("#news").children).find((entry) => entry.dataset.url === readerArticleUrl);
-  (card?.querySelector(".article-title") ?? $("#news")).focus({ preventScroll: true });
-  readerArticleUrl = null;
+  const card = Array.from($("#news").children).find((entry) => entry.dataset.url === readerArticle?.url);
+  (returnFocus?.isConnected ? returnFocus : card?.querySelector(".article-title") ?? $("#news")).focus({ preventScroll: true });
+  readerArticle = null;
+  returnFocus = null;
 });
 setInterval(() => { if (!document.hidden) render(); }, 60000);
 setInterval(() => { if (!document.hidden) loadNews(); }, 5 * 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) loadNews(); });
+localize();
 loadNews();

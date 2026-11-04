@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "15457764556071989189"
+      "templateHash": "11682582809823640589"
     }
   },
   "parameters": {
@@ -123,6 +123,19 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.Web/serverfarms', format('{0}-plan', parameters('appName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites/sourcecontrols",
+      "apiVersion": "2023-12-01",
+      "name": "[format('{0}/{1}', parameters('appName'), 'web')]",
+      "properties": {
+        "repoUrl": "https://github.com/v-khdumi/myNews",
+        "branch": "main",
+        "isManualIntegration": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('appName'))]"
       ]
     }
   ],

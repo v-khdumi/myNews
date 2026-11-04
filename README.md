@@ -86,7 +86,7 @@ Procesarea favorizează știrile cele mai noi și este limitată per rulare și 
 
 ## Deploy în Azure Web App
 
-Repository-ul include `infra/main.bicep`, varianta ARM JSON `infra/azuredeploy.json` pentru butonul **Deploy to Azure** și workflow-ul manual `.github/workflows/azure.yml`. **Butonul creează numai infrastructura Web App; codul aplicației se publică separat, la pasul 2.** Nu creează resurse sau deployment-uri de modele AI. Planul App Service B1 și inferența AI sunt servicii cu costuri.
+Repository-ul include `infra/main.bicep`, varianta ARM JSON `infra/azuredeploy.json` pentru butonul **Deploy to Azure** și workflow-ul manual `.github/workflows/azure.yml`. **Butonul creează infrastructura și publică aplicația din ramura `main` a repository-ului public**, prin integrarea Git a App Service, fără token GitHub. Nu creează resurse sau deployment-uri de modele AI. Planul App Service B1 și inferența AI sunt servicii cu costuri.
 
 ### 1. Infrastructură
 
@@ -104,7 +104,9 @@ az deployment group create \
   --parameters appName=YOUR_GLOBALLY_UNIQUE_APP_NAME
 ```
 
-Implicit creează numai Web App Linux Python 3.12, plan B1, HTTPS obligatoriu, TLS minimum 1.2, Always On și identitate gestionată. AI rămâne dezactivat. Numele aplicației trebuie să fie disponibil global.
+Implicit creează Web App Linux Python 3.12, plan B1, HTTPS obligatoriu, TLS minimum 1.2, Always On și identitate gestionată, apoi descarcă și construiește aplicația. AI rămâne dezactivat. Numele aplicației trebuie să fie disponibil global. Prima instalare a dependențelor poate dura câteva minute; urmărește **App Service → Deployment Center → Logs** și verifică `https://NUME_APLICATIE.azurewebsites.net/healthz`, care trebuie să răspundă cu `{"status":"ok"}`.
+
+Integrarea Git este manuală: nu creează webhook și nu publică automat fiecare push. Pentru actualizări folosește **Deployment Center → Sync**, sau configurează workflow-ul OIDC de la pasul 2. Într-un fork, modifică `repoUrl` și `branch` din resursa `sourceControl` înainte de regenerarea template-ului.
 
 În **App Service → Settings → Environment variables**, adaugă endpoint-ul, deployment-ul și cheia AI împreună. Preferă o referință `@Microsoft.KeyVault(SecretUri=https://YOUR_VAULT.vault.azure.net/secrets/YOUR_SECRET/)` pentru cheie și acordă identității aplicației rolul **Key Vault Secrets User**, cu acces de rețea la vault. Identitatea gestionată din template este pentru integrarea cu Key Vault; clientul AI din această versiune folosește cheia rezolvată de App Service, nu autentificare Entra directă.
 
@@ -112,7 +114,7 @@ Nu pune cheia în Bicep, fișiere de parametri, HTML sau argumente CLI salvate �
 
 După modificarea `infra/main.bicep`, regenerează șablonul folosit de buton cu `az bicep build --file infra/main.bicep --outfile infra/azuredeploy.json` și include ambele fișiere în commit.
 
-### 2. Autentificare GitHub → Azure
+### 2. Actualizări prin GitHub Actions (opțional)
 
 Creează un environment GitHub **`azure-production`**, cu aprobări dacă dorești, și o identitate Entra cu credential federat OIDC:
 
@@ -131,7 +133,7 @@ AZURE_SUBSCRIPTION_ID
 AZURE_WEBAPP_NAME
 ```
 
-Rulează workflow-ul **Deploy Azure Web App** din Actions. Rulează testele, creează un pachet cu doar fișierele necesare și îl publică prin OIDC, fără publish profile în repository. App Service instalează `requirements.txt` prin Oryx și pornește Gunicorn.
+Rulează workflow-ul **Deploy Azure Web App** din Actions. Rulează testele, creează un pachet cu doar fișierele necesare și îl publică prin OIDC, fără publish profile în repository. App Service instalează `requirements.txt` prin Oryx și pornește Gunicorn. Workflow-ul verifică apoi `/healthz` și pagina principală; un serviciu care nu pornește nu mai este raportat ca deploy reușit.
 
 Pentru publicare manuală, după configurarea infrastructurii:
 
@@ -142,6 +144,23 @@ zip -r app.zip index.html styles.css theme.js app.mjs news-core.mjs i18n.mjs \
 az webapp deploy --resource-group mynews-rg \
   --name YOUR_GLOBALLY_UNIQUE_APP_NAME --src-path app.zip --type zip
 ```
+
+### Recuperarea unui deployment existent cu eroare 503
+
+Versiunea inițială a template-ului crea numai infrastructura, dar configura deja comanda `gunicorn --config gunicorn.conf.py server:app`. Fără publicarea codului, fișierele necesare pornirii lipseau și App Service putea răspunde cu **503 Service Unavailable**. Starea „Succeeded” a resurselor nu confirma că aplicația fusese instalată.
+
+Pentru resursele deja create, publică aplicația fără să recreezi planul sau Web App. În Azure Cloud Shell (Bash) sau Azure CLI autentificat, rulează cu grupul și numele aplicației existente:
+
+```sh
+az webapp deployment source config \
+  --resource-group YOUR_EXISTING_RESOURCE_GROUP \
+  --name YOUR_EXISTING_APP_NAME \
+  --repo-url https://github.com/v-khdumi/myNews \
+  --branch main --manual-integration
+curl --fail https://YOUR_EXISTING_APP_NAME.azurewebsites.net/healthz
+```
+
+Așteaptă finalizarea construirii în **Deployment Center → Logs** înainte de verificarea HTTP. Alternativ, reaplică template-ul actualizat cu același `appName` și aceleași setări AI securizate, sau publică pachetul prin workflow-ul de mai sus. Dacă 503 persistă după publicarea codului, verifică **Log stream** pentru eroarea exactă Gunicorn/Oryx; `/readyz` poate răspunde separat cu 503 până există o ediție recentă și nu este endpoint-ul de liveness.
 
 ### 3. Operare
 

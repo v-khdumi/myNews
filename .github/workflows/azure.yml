@@ -40,6 +40,17 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - uses: azure/webapps-deploy@v3
+        id: deploy
         with:
           app-name: ${{ vars.AZURE_WEBAPP_NAME }}
           package: app.zip
+      - name: Verify application startup
+        env:
+          APP_URL: ${{ steps.deploy.outputs.webapp-url }}
+        run: |
+          curl --fail --silent --show-error --retry 12 --retry-all-errors \
+            --retry-delay 10 --connect-timeout 10 --max-time 20 \
+            "${APP_URL%/}/healthz" --output health.json
+          python -c 'import json; assert json.load(open("health.json"))["status"] == "ok"'
+          curl --fail --silent --show-error --connect-timeout 10 --max-time 20 \
+            "${APP_URL%/}/" --output /dev/null

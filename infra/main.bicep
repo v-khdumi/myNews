@@ -65,5 +65,15 @@ resource web 'Microsoft.Web/sites@2023-12-01' = {
   }
 }
 
+resource sourceControl 'Microsoft.Web/sites/sourcecontrols@2023-12-01' = {
+  parent: web
+  name: 'web'
+  properties: {
+    repoUrl: 'https://github.com/v-khdumi/myNews'
+    branch: 'main'
+    isManualIntegration: true
+  }
+}
+
 output url string = 'https://${web.properties.defaultHostName}'
 output principalId string = web.identity.principalId

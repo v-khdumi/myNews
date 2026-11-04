@@ -1,0 +1,139 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.48.1.52935",
+      "templateHash": "15457764556071989189"
+    }
+  },
+  "parameters": {
+    "appName": {
+      "type": "string",
+      "metadata": {
+        "description": "Globally unique Web App name."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "sku": {
+      "type": "string",
+      "defaultValue": "B1",
+      "metadata": {
+        "description": "App Service plan SKU. B1 incurs Azure charges."
+      }
+    },
+    "aiEndpoint": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Azure OpenAI/Foundry resource endpoint, not the project URL. Leave empty to run RSS only."
+      }
+    },
+    "aiDeployment": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "aiApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "API key or an App Service Key Vault reference. Never put a literal key in source control."
+      }
+    },
+    "aiMaxArticlesPerRun": {
+      "type": "int",
+      "defaultValue": 20,
+      "minValue": 0,
+      "maxValue": 200
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-12-01",
+      "name": "[format('{0}-plan', parameters('appName'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('sku')]"
+      },
+      "kind": "linux",
+      "properties": {
+        "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-12-01",
+      "name": "[parameters('appName')]",
+      "location": "[parameters('location')]",
+      "kind": "app,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('{0}-plan', parameters('appName')))]",
+        "httpsOnly": true,
+        "clientAffinityEnabled": false,
+        "siteConfig": {
+          "linuxFxVersion": "PYTHON|3.12",
+          "appCommandLine": "gunicorn --config gunicorn.conf.py server:app",
+          "alwaysOn": true,
+          "minTlsVersion": "1.2",
+          "ftpsState": "Disabled",
+          "healthCheckPath": "/healthz",
+          "appSettings": [
+            {
+              "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+              "value": "true"
+            },
+            {
+              "name": "NEWS_DATA_PATH",
+              "value": "/home/mynews/news.json"
+            },
+            {
+              "name": "NEWS_UPDATE_MINUTES",
+              "value": "15"
+            },
+            {
+              "name": "NEWS_AUTO_UPDATE",
+              "value": "1"
+            },
+            {
+              "name": "AI_MAX_ARTICLES_PER_RUN",
+              "value": "[string(parameters('aiMaxArticlesPerRun'))]"
+            },
+            {
+              "name": "AZURE_OPENAI_ENDPOINT",
+              "value": "[parameters('aiEndpoint')]"
+            },
+            {
+              "name": "AZURE_OPENAI_DEPLOYMENT",
+              "value": "[parameters('aiDeployment')]"
+            },
+            {
+              "name": "AZURE_OPENAI_API_KEY",
+              "value": "[parameters('aiApiKey')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', format('{0}-plan', parameters('appName')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "url": {
+      "type": "string",
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', parameters('appName')), '2023-12-01').defaultHostName)]"
+    },
+    "principalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/sites', parameters('appName')), '2023-12-01', 'full').identity.principalId]"
+    }
+  }
+}

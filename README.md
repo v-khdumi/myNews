@@ -2,6 +2,8 @@
 
 Portal de știri **România + worldwide**, cu interfață editorială responsive, teme zi/noapte și ediții în **română și engleză**. Extinde agregatorul RSS existent, păstrând fereastra mobilă de 24 de ore, deduplicarea și rezistența la indisponibilitatea surselor.
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fv-khdumi%2FmyNews%2Fmain%2Finfra%2Fazuredeploy.json)
+
 ## Ce include
 
 - 12 surse configurate: HotNews, G4Media, Mediafax, Digi24, Descoperă, Biziday, Zona IT, Go4it, Știripesurse.ro, The Guardian, France 24 și Al Jazeera. „Local” înseamnă România în această versiune, nu selecție pe oraș.
@@ -84,11 +86,13 @@ Procesarea favorizează știrile cele mai noi și este limitată per rulare și 
 
 ## Deploy în Azure Web App
 
-Repository-ul include `infra/main.bicep` și workflow-ul manual `.github/workflows/azure.yml`. **Nu creează automat resurse, abonamente sau deployment-uri de modele AI.** Planul App Service B1 și inferența AI sunt servicii cu costuri.
+Repository-ul include `infra/main.bicep`, varianta ARM JSON `infra/azuredeploy.json` pentru butonul **Deploy to Azure** și workflow-ul manual `.github/workflows/azure.yml`. **Butonul creează numai infrastructura Web App; codul aplicației se publică separat, la pasul 2.** Nu creează resurse sau deployment-uri de modele AI. Planul App Service B1 și inferența AI sunt servicii cu costuri.
 
 ### 1. Infrastructură
 
-Cu Azure CLI autentificat în abonamentul potrivit:
+Apasă **Deploy to Azure**, alege abonamentul, grupul de resurse și regiunea, apoi completează `appName` cu un nume disponibil global. Lasă setările AI goale pentru modul RSS-only.
+
+Alternativ, cu Azure CLI autentificat în abonamentul potrivit:
 
 ```sh
 az login
@@ -105,6 +109,8 @@ Implicit creează numai Web App Linux Python 3.12, plan B1, HTTPS obligatoriu, T
 În **App Service → Settings → Environment variables**, adaugă endpoint-ul, deployment-ul și cheia AI împreună. Preferă o referință `@Microsoft.KeyVault(SecretUri=https://YOUR_VAULT.vault.azure.net/secrets/YOUR_SECRET/)` pentru cheie și acordă identității aplicației rolul **Key Vault Secrets User**, cu acces de rețea la vault. Identitatea gestionată din template este pentru integrarea cu Key Vault; clientul AI din această versiune folosește cheia rezolvată de App Service, nu autentificare Entra directă.
 
 Nu pune cheia în Bicep, fișiere de parametri, HTML sau argumente CLI salvate în istoricul shell-ului. Parametrul Bicep `aiApiKey` este securizat și poate primi o referință Key Vault. Redeploy-ul template-ului reaplică setările AI: transmite aceleași valori/referințe securizate sau reconfigurează-le după deploy.
+
+După modificarea `infra/main.bicep`, regenerează șablonul folosit de buton cu `az bicep build --file infra/main.bicep --outfile infra/azuredeploy.json` și include ambele fișiere în commit.
 
 ### 2. Autentificare GitHub → Azure
 

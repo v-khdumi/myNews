@@ -4,95 +4,71 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0c1015">
-    <meta name="description" content="Știrile ultimelor 24 de ore din nouă surse de actualitate, știință și tehnologie, într-un singur loc.">
-    <title>myNews — Știrile ultimelor 24 de ore</title>
+    <meta name="description" content="myNews: perspective locale și globale, sinteze AI în română și engleză, cu surse la vedere.">
+    <title>myNews — O perspectivă mai clară</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <script src="theme.js"></script>
     <link rel="stylesheet" href="styles.css">
     <script type="module" src="app.mjs"></script>
   </head>
   <body>
-    <a class="skip-link" href="#news">Sari la știri</a>
+    <a class="skip-link" href="#news" data-i18n="skip">Sari la știri</a>
     <header class="site-header">
-      <a class="brand" href="./" aria-label="myNews, pagina principală">
-        <span class="brand-icon" aria-hidden="true">m<span>n</span></span>
-        my<span>News</span>
-      </a>
-      <span class="edition">ULTIMELE 24H</span>
-      <button id="theme-toggle" class="theme-toggle" type="button" role="switch" aria-label="Temă întunecată" aria-checked="true" disabled>
-        <span class="theme-option theme-day" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
-          Zi
-        </span>
-        <span class="theme-track" aria-hidden="true"><span class="theme-thumb"></span></span>
-        <span class="theme-option theme-night" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13Z"/></svg>
-          Noapte
-        </span>
-      </button>
-    </header>
-
-    <main>
-      <h1 class="sr-only">Știrile ultimelor 24 de ore</h1>
-      <div class="update-row">
-        <span id="update-status" role="status">Se încarcă știrile…</span>
-        <button id="refresh" class="refresh-button" type="button" disabled><span aria-hidden="true">↻</span> Reîncarcă</button>
+      <a class="brand" href="./" aria-label="myNews"><span class="brand-mark" aria-hidden="true">m<span>n</span></span>myNews<span class="brand-period">.</span></a>
+      <span class="brand-descriptor" data-i18n="descriptor">O lume. Mai multe perspective.</span>
+      <div class="header-actions">
+        <div class="language-switch" role="group" data-i18n-aria="languageLabel" aria-label="Limba ediției">
+          <button type="button" data-language="ro" aria-pressed="true">RO</button>
+          <button type="button" data-language="en" aria-pressed="false">EN</button>
+        </div>
+        <button id="theme-toggle" class="theme-toggle" type="button" role="switch" aria-label="Temă întunecată" aria-checked="true" disabled>
+          <span class="theme-option theme-day" aria-hidden="true"><span data-i18n="day">Zi</span></span>
+          <span class="theme-track" aria-hidden="true"><span class="theme-thumb"></span></span>
+          <span class="theme-option theme-night" aria-hidden="true"><span data-i18n="night">Noapte</span></span>
+        </button>
       </div>
-
-      <section class="news-panel" aria-label="Știri și filtre">
-        <div class="toolbar">
-          <div class="source-filters" role="group" aria-label="Filtrează după sursă">
-          </div>
-          <label class="search-box">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
-            <span class="sr-only">Caută în titluri</span>
-            <input id="search" type="search" placeholder="Caută în știri…" autocomplete="off" maxlength="200">
-          </label>
-        </div>
-        <div id="notice" class="notice" role="status" hidden></div>
-        <div class="results-bar">
-          <h2>Cele mai recente <span id="result-count" aria-live="polite"></span></h2>
-          <label class="sort-label">Ordonează:
-            <select id="sort">
-              <option value="newest">Cele mai noi</option>
-              <option value="oldest">Cele mai vechi</option>
-            </select>
-          </label>
-        </div>
-        <div id="news" class="news-grid" aria-busy="true" tabindex="-1"></div>
-        <div id="empty" class="empty-state" hidden>
-          <span class="empty-icon" aria-hidden="true">⌕</span>
-          <h3 id="empty-title">Se încarcă știrile</h3>
-          <p id="empty-description">Citim cea mai recentă ediție.</p>
-          <button id="reset-filters" class="reset-button" type="button" hidden>Resetează filtrele</button>
-        </div>
-        <div class="load-more-row"><button id="load-more" class="load-more" type="button" hidden>Mai multe știri <span aria-hidden="true">↓</span></button></div>
+    </header>
+    <main>
+      <div class="edition-line"><span id="today"></span><span class="edition-label"><span class="live-dot" aria-hidden="true"></span><span data-i18n="rolling">EDIȚIA ULTIMELOR 24 DE ORE</span></span></div>
+      <section class="intro" aria-labelledby="page-title">
+        <div><p class="eyebrow" data-i18n="eyebrow">INFORMAT. NU COPLEȘIT.</p><h1 id="page-title"><span data-i18n="heroLine">O lume în mișcare.</span><br><em data-i18n="heroAccent">O perspectivă mai clară.</em></h1><p class="intro-description" data-i18n="intro">De aproape și de departe. Știrile care contează, într-un singur loc, cu sursele mereu la vedere.</p></div>
+        <div class="edition-stats" aria-label="Statistici"><div><strong id="total-count">0</strong><span data-i18n="recentStories">știri în ultimele 24h</span></div><div><strong id="source-count">12</strong><span data-i18n="publishers">surse independente</span></div><p><span class="ai-star" aria-hidden="true">✦</span> <span data-i18n="powered">Sinteze bilingve · Azure AI Foundry</span></p></div>
       </section>
-
-      <details class="source-details">
-        <summary>Surse și starea actualizării</summary>
-        <ul id="source-status"></ul>
-        <p>Actualizare programată la fiecare 30 de minute; GitHub poate întârzia rulările. Sunt afișate doar articole cu data publicării în ultimele 24 de ore, disponibile în fluxurile RSS. Unele fluxuri pot limita numărul de articole.</p>
-        <p>Aici vezi titlurile, imaginile și scurte extrase din RSS. Articolele integrale și drepturile asupra materialelor aparțin publicațiilor originale.</p>
-      </details>
+      <nav class="region-nav" data-i18n-aria="regionLabel" aria-label="Regiunea știrilor">
+        <button type="button" class="active" data-region="all" aria-pressed="true"><span data-i18n="allNews">Toate știrile</span><span data-count="all">0</span></button>
+        <button type="button" data-region="romania" aria-pressed="false"><span data-i18n="romania">România</span><span data-count="romania">0</span></button>
+        <button type="button" data-region="world" aria-pressed="false"><span data-i18n="world">Worldwide</span><span data-count="world">0</span></button>
+        <a href="#about" class="about-link"><span data-i18n="howItWorks">Cum funcționează</span> ↗</a>
+      </nav>
+      <section class="news-panel" data-i18n-aria="newsLabel" aria-label="Știri și filtre">
+        <div class="toolbar">
+          <div id="category-filters" class="category-filters" role="group" data-i18n-aria="categoryLabel" aria-label="Filtrează după categorie"></div>
+          <label class="search-box"><span aria-hidden="true">⌕</span><span class="sr-only" data-i18n="searchLabel">Caută în știri</span><input id="search" type="search" placeholder="Caută un subiect…" autocomplete="off" maxlength="200"></label>
+        </div>
+        <div class="update-row"><span id="update-status" role="status"></span><button id="refresh" type="button" disabled><span aria-hidden="true">↻</span> <span data-i18n="refresh">Actualizează</span></button></div>
+        <div id="notice" class="notice" role="status" hidden></div>
+        <div class="content-layout">
+          <div class="stories-column">
+            <div class="results-bar"><h2><span data-i18n="latest">În prim-plan</span> <span id="result-count" aria-live="polite"></span></h2><div class="result-controls"><label><span class="sr-only" data-i18n="sourceLabel">Publicație</span><select id="source"></select></label><label><span class="sr-only" data-i18n="sortLabel">Ordonează</span><select id="sort"><option value="newest" data-i18n="newest">Cele mai noi</option><option value="oldest" data-i18n="oldest">Cele mai vechi</option></select></label></div></div>
+            <div id="news" class="news-grid" aria-busy="true" tabindex="-1"></div>
+            <div id="empty" class="empty-state" hidden><span class="empty-icon" aria-hidden="true">◎</span><h3 id="empty-title"></h3><p id="empty-description"></p><button id="reset-filters" type="button" hidden data-i18n="reset">Resetează filtrele</button></div>
+            <div class="load-more-row"><button id="load-more" type="button" hidden><span data-i18n="more">Descoperă mai multe știri</span> ↓</button></div>
+          </div>
+          <aside class="sidebar">
+            <section class="briefing"><div class="aside-heading"><span class="live-dot" aria-hidden="true"></span><h2 data-i18n="onTheRadar">Pe radar</h2><span data-i18n="now">ACUM</span></div><p class="aside-subtitle" data-i18n="radarDescription">Cele mai recente, din toate sursele.</p><ol id="radar"></ol></section>
+            <section class="intelligence-card"><span class="ai-star" aria-hidden="true">✦</span><p class="eyebrow" data-i18n="aiEyebrow">MAI MULTĂ CLARITATE</p><h2 data-i18n="aiHeading">Știrile au surse.<br>Perspectivele, context.</h2><p data-i18n="aiDescription">AI-ul sintetizează informațiile disponibile în română și engleză. Fiecare sinteză este etichetată și trimite la articolul original.</p><div id="ai-status" role="status"></div><label class="ai-only"><input id="ai-only" type="checkbox"><span data-i18n="aiOnly">Doar sinteze bilingve</span></label></section>
+            <section class="editorial-note"><span aria-hidden="true">↗</span><h2 data-i18n="sourceFirst">Sursa, pe primul loc.</h2><p data-i18n="sourceFirstText">Nicio sinteză nu înlocuiește jurnalismul original. Citește, verifică și susține publicațiile care îl fac posibil.</p></section>
+          </aside>
+        </div>
+      </section>
+      <section id="about" class="about-section"><div><p class="eyebrow" data-i18n="transparency">TRANSPARENȚĂ EDITORIALĂ</p><h2 data-i18n="aboutHeading">Un agregator. Nu o redacție.</h2><p data-i18n="aboutText">Colectăm fluxuri RSS publice, nu articole integrale. Sintezele AI folosesc doar titlul și extrasul disponibil și pot conține erori. Nu garantăm originalitate juridică sau verificare independentă. Imaginile sunt ale publicațiilor și sunt încărcate de la gazdele lor.</p></div><details class="source-details"><summary data-i18n="sourceDetails">Surse și starea actualizării</summary><ul id="source-status"></ul><p data-i18n="scheduleNote">Preluarea este periodică, nu în timp real. Unele fluxuri au acoperire limitată; știrile mai vechi de 24 de ore sunt eliminate automat.</p></details></section>
     </main>
     <dialog id="article-reader" class="article-reader" aria-labelledby="reader-title" aria-describedby="reader-note">
-      <div class="reader-toolbar">
-        <span>PREVIZUALIZARE ȘTIRE</span>
-        <button id="close-reader" class="close-reader" type="button" autofocus>Închide <span aria-hidden="true">×</span></button>
-      </div>
-      <article class="reader-content">
-        <div id="reader-meta" class="reader-meta"></div>
-        <h2 id="reader-title"></h2>
-        <div id="reader-image"></div>
-        <p id="reader-excerpt" class="reader-excerpt"></p>
-      </article>
-      <div class="reader-footer">
-        <p id="reader-note" class="reader-note">Scurt extras din fluxul RSS, nu articolul integral. Textul complet și drepturile asupra materialelor aparțin autorilor și publicației originale.</p>
-        <a id="reader-source" class="reader-source" target="_blank" rel="noopener noreferrer"></a>
-      </div>
+      <div class="reader-toolbar"><span id="reader-kind"></span><button id="close-reader" type="button" autofocus><span data-i18n="close">Închide</span> ×</button></div>
+      <article class="reader-content"><div id="reader-meta" class="reader-meta"></div><h2 id="reader-title"></h2><div id="reader-image"></div><p id="reader-excerpt" class="reader-excerpt"></p><p id="reader-provenance" class="reader-provenance"></p></article>
+      <div class="reader-footer"><p id="reader-note" class="reader-note"></p><a id="reader-source" class="reader-source" target="_blank" rel="noopener noreferrer"></a></div>
     </dialog>
-    <footer><a class="footer-brand" href="./">myNews<span>.</span></a><span>9 surse · fereastră mobilă de 24h</span><span>Ora României · Europe/Bucharest</span></footer>
-    <noscript><p class="noscript">Activează JavaScript pentru a vedea și filtra știrile agregate.</p></noscript>
+    <footer><a class="brand" href="./">myNews<span class="brand-period">.</span></a><span data-i18n="footer">Perspective locale. Orizonturi globale.</span><span data-i18n="timezone">Ora României · Europe/Bucharest</span></footer>
+    <noscript><p class="noscript">Activează JavaScript pentru a vedea știrile. Enable JavaScript to read the news.</p></noscript>
   </body>
 </html>

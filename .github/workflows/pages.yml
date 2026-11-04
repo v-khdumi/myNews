@@ -31,6 +31,7 @@ jobs:
           node-version: "22"
       - name: Verifică agregatorul și filtrele
         run: |
+          pip install -r requirements.txt
           python -m unittest discover -s tests -p 'test_*.py'
           node --test tests/*.test.mjs
       - name: Restaurează ediția precedentă
@@ -43,10 +44,15 @@ jobs:
       - name: Construiește pagina și preia știrile
         run: |
           mkdir -p _site/data .cache
-          cp index.html styles.css theme.js app.mjs news-core.mjs favicon.svg _site/
+          cp index.html styles.css theme.js app.mjs news-core.mjs i18n.mjs favicon.svg _site/
           touch _site/.nojekyll
           python scripts/aggregate.py --previous .cache/news.json --output _site/data/news.json
           cp _site/data/news.json .cache/news.json
+        env:
+          AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ vars.AZURE_OPENAI_DEPLOYMENT }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AI_MAX_ARTICLES_PER_RUN: ${{ vars.AI_MAX_ARTICLES_PER_RUN || '20' }}
       - name: Păstrează ediția pentru următoarea actualizare
         uses: actions/cache/save@v4
         with:

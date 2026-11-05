@@ -1,5 +1,6 @@
 import { articleText, categoryOf, CATEGORIES, currentArticles, relativeTime, safeImageUrl, selectArticles, SOURCES, validateEdition } from "./news-core.mjs";
 import { messages } from "./i18n.mjs";
+import { paginateText } from "./reader.mjs";
 
 const $ = (selector) => document.querySelector(selector);
 const pageSize = 12;
@@ -12,6 +13,10 @@ try {
 const state = { data: null, source: "all", query: "", sort: "newest", region: "all", category: "all", aiOnly: false, language, limit: pageSize, loading: false, error: false };
 let readerArticle = null;
 let returnFocus = null;
+let readerText = "";
+let readerPages = [];
+let readerPage = 0;
+let readerLayoutFrame = 0;
 const t = () => messages[state.language];
 const date = (value, full = false) => new Intl.DateTimeFormat(state.language === "ro" ? "ro-RO" : "en-GB", {
   dateStyle: full ? "long" : "medium", timeStyle: "short", timeZone: "Europe/Bucharest",
@@ -45,16 +50,23 @@ function imageFor(article, thumbnail = false) {
   return container;
 }
 
+function renderReaderText(text) {
+  $("#reader-excerpt").replaceChildren(...text.split(/\n\s*\n/u).map((paragraph) => element("p", "", paragraph)));
+}
+
 function renderReader() {
   const article = readerArticle;
   if (!article) return;
   const source = SOURCES.find((entry) => entry.id === article.source);
   const text = articleText(article, state.language);
-  $("#reader-kind").textContent = text.ai ? t().aiBadge : t().rssBadge;
+  $("#reader-kind").textContent = `${t().readerKind} · ${t().categories[categoryOf(article)]}`;
   $("#reader-title").textContent = text.title;
   $("#reader-title").lang = text.language;
   $("#reader-meta").textContent = `${source.name} · ${date(article.published_at, true)}`;
-  $("#reader-excerpt").textContent = text.summary || t().noExcerpt;
+  readerText = text.summary || t().noExcerpt;
+  readerPages = [];
+  readerPage = 0;
+  renderReaderText(readerText);
   $("#reader-excerpt").lang = text.summary ? text.language : state.language;
   $("#reader-image").replaceChildren();
   const image = imageFor(article);
@@ -64,13 +76,55 @@ function renderReader() {
     figure.append(image, element("figcaption", "", credit));
     $("#reader-image").append(figure);
   }
-  $("#reader-provenance").textContent = text.ai
-    ? `${t().model}: ${article.synthesis.model} · ${t().generated}: ${date(article.synthesis.generated_at)}\n${t().originalTitle}: ${article.title}`
-    : `${t().originalLanguage}: ${text.language.toUpperCase()}`;
+  $(".reader-body").classList.toggle("has-image", Boolean(image));
   $("#reader-note").textContent = text.ai ? t().aiNote : t().rssNote;
   $("#reader-source").href = article.url;
-  $("#reader-source").textContent = `${t().readSource} · ${source.name} ↗`;
+  $("#reader-source").textContent = `${t().readerSource} ↗`;
   $("#reader-source").setAttribute("aria-label", `${t().readSource}: ${source.name} (${t().newTab})`);
+  if ($("#article-reader").open) layoutReader();
+}
+
+function showReaderPage(index) {
+  if (!readerPages.length) return;
+  readerPage = Math.max(0, Math.min(index, readerPages.length - 1));
+  renderReaderText(readerPages[readerPage].text);
+  $("#reader-page").textContent = `${readerPage + 1} / ${readerPages.length}`;
+  $("#reader-page").setAttribute("aria-label", `${t().page} ${readerPage + 1} ${t().of} ${readerPages.length}`);
+  $("#reader-previous").disabled = readerPage === 0;
+  $("#reader-next").disabled = readerPage === readerPages.length - 1;
+}
+
+function layoutReader() {
+  const dialog = $("#article-reader");
+  if (!dialog.open) return;
+  const anchor = readerPages[readerPage]?.start ?? 0;
+  const excerpt = $("#reader-excerpt");
+  dialog.classList.remove("reader-scroll", "reader-text-first");
+  $(".reader-pagination").hidden = false;
+  const fits = (candidate) => {
+    renderReaderText(candidate);
+    return excerpt.scrollHeight <= excerpt.clientHeight && excerpt.scrollWidth <= excerpt.clientWidth;
+  };
+  try {
+    readerPages = paginateText(readerText, fits);
+    if (readerPages.length > 1 && getComputedStyle($("#reader-image")).display !== "none") {
+      dialog.classList.add("reader-text-first");
+      readerPages = paginateText(readerText, fits);
+    }
+    const index = readerPages.findIndex((page) => page.end > anchor);
+    showReaderPage(Math.max(0, index));
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    console.warn("Reader viewport is too small; enabling accessible scrolling:", error);
+    dialog.classList.add("reader-scroll");
+    renderReaderText(readerText);
+    $(".reader-pagination").hidden = true;
+  }
+}
+
+function scheduleReaderLayout() {
+  cancelAnimationFrame(readerLayoutFrame);
+  readerLayoutFrame = requestAnimationFrame(layoutReader);
 }
 
 function openArticle(article) {
@@ -79,7 +133,7 @@ function openArticle(article) {
   renderReader();
   document.documentElement.classList.add("reader-open");
   $("#article-reader").showModal();
-  $("#article-reader").scrollTop = 0;
+  layoutReader();
   $("#close-reader").focus({ preventScroll: true });
 }
 
@@ -102,7 +156,7 @@ function articleCard(article, now, index) {
   const body = element("div", "card-body");
   const meta = element("div", "card-meta");
   meta.append(element("span", "category-label", t().categories[categoryOf(article)]),
-    element("span", text.ai ? "ai-badge" : "rss-badge", text.ai ? `✦ ${t().aiBadge}` : `${t().originalLanguage} · ${text.language.toUpperCase()}`));
+    element("span", text.ai ? "ai-badge" : "rss-badge", text.ai ? t().aiBadge : `${t().originalLanguage} · ${text.language.toUpperCase()}`));
   const heading = element("h3");
   const title = element("button", "article-title", text.title);
   title.lang = text.language;
@@ -311,6 +365,23 @@ $("#reset-filters").addEventListener("click", () => {
 });
 $("#refresh").addEventListener("click", loadNews);
 $("#close-reader").addEventListener("click", () => $("#article-reader").close());
+$("#reader-previous").addEventListener("click", () => showReaderPage(readerPage - 1));
+$("#reader-next").addEventListener("click", () => showReaderPage(readerPage + 1));
+$("#article-reader").addEventListener("keydown", (event) => {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  const direction = { ArrowLeft: -1, PageUp: -1, ArrowRight: 1, PageDown: 1 }[event.key];
+  if (direction) {
+    event.preventDefault();
+    showReaderPage(readerPage + direction);
+  }
+});
+window.addEventListener("resize", scheduleReaderLayout);
+window.visualViewport?.addEventListener("resize", scheduleReaderLayout);
+document.fonts.ready.then(scheduleReaderLayout);
+document.fonts.addEventListener("loadingdone", scheduleReaderLayout);
+new ResizeObserver(() => {
+  if (!$("#article-reader").classList.contains("reader-scroll")) scheduleReaderLayout();
+}).observe($("#reader-excerpt"));
 $("#article-reader").addEventListener("click", (event) => {
   if (event.target !== $("#article-reader")) return;
   const bounds = event.target.getBoundingClientRect();

@@ -12,7 +12,7 @@ import threading
 from flask import Flask, jsonify, send_from_directory
 
 ROOT = Path(__file__).resolve().parent
-PUBLIC_FILES = {"index.html", "styles.css", "theme.js", "app.mjs", "news-core.mjs", "i18n.mjs", "favicon.svg"}
+PUBLIC_FILES = {"index.html", "styles.css", "theme.js", "app.mjs", "news-core.mjs", "i18n.mjs", "reader.mjs", "favicon.svg"}
 LOG = logging.getLogger("mynews")
 
 

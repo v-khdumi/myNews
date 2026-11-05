@@ -27,6 +27,8 @@ else:
 UTC = timezone.utc
 MAX_FEED_BYTES = 8 * 1024 * 1024
 MAX_PAGES = 40
+EXCERPT_MAX_WORDS = 300
+EXCERPT_MAX_CHARS = 2400
 TRACKING_PARAMS = {"fbclid", "gclid", "mc_cid", "mc_eid"}
 LOG = logging.getLogger("mynews")
 
@@ -131,9 +133,9 @@ def short_excerpt(value):
     if truncated:
         text = text[:-1]
     words = text.split()
-    clipped = " ".join(words[:45])
-    if len(clipped) > 280:
-        clipped = clipped[:281].rsplit(" ", 1)[0][:280]
+    clipped = " ".join(words[:EXCERPT_MAX_WORDS])
+    if len(clipped) > EXCERPT_MAX_CHARS:
+        clipped = clipped[:EXCERPT_MAX_CHARS + 1].rsplit(" ", 1)[0][:EXCERPT_MAX_CHARS]
     return clipped + ("…" if truncated or len(clipped) < len(text) else "")
 
 

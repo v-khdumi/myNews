@@ -17,7 +17,7 @@ class ServerTests(unittest.TestCase):
         self.client = self.app.test_client()
 
     def test_public_assets_and_liveness(self):
-        for path in ("/", "/app.mjs", "/i18n.mjs", "/styles.css", "/healthz"):
+        for path in ("/", "/app.mjs", "/i18n.mjs", "/reader.mjs", "/styles.css", "/healthz"):
             with self.subTest(path=path):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 200)

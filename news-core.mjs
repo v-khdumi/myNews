@@ -23,7 +23,8 @@ export function articleText(article, language = "ro") {
     && typeof synthesis.model === "string" && synthesis.model.trim()
     && typeof synthesis.generated_at === "string" && Number.isFinite(Date.parse(synthesis.generated_at))
     && typeof edition?.title === "string" && edition.title.trim() && edition.title.length <= 180
-    && typeof edition?.summary === "string" && edition.summary.trim() && edition.summary.length <= 1200;
+    && typeof edition?.summary === "string" && edition.summary.trim() && edition.summary.length <= 3600
+    && edition.summary.trim().split(/\s+/u).length <= 300;
   return valid
     ? { title: edition.title, summary: edition.summary, ai: true, language }
     : { title: article.title, summary: article.excerpt || "", ai: false,

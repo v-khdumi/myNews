@@ -14,3 +14,15 @@ test("both interface languages cover all strings and categories", () => {
     }
   }
 });
+
+test("public copy and metadata do not expose generation or model branding", () => {
+  const forbidden = /\bAI\b|Azure|Foundry|OpenAI|generat(?:ed|ă|e)?|sintez|digest/iu;
+  for (const language of ["ro", "en"]) {
+    for (const [key, value] of Object.entries(messages[language])) {
+      if (typeof value === "string") assert.doesNotMatch(value, forbidden, `${language}.${key}`);
+    }
+  }
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  for (const text of html.matchAll(/>([^<>]+)</g)) assert.doesNotMatch(text[1], forbidden);
+  assert.doesNotMatch(html.match(/<meta name="description"[^>]+>/)[0], forbidden);
+});

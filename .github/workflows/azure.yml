@@ -26,31 +26,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Validate deployment target
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+        run: |
+          test -n "$RESOURCE_GROUP" || { echo "::error::Set AZURE_RESOURCE_GROUP in the azure-production environment."; exit 1; }
+          test -n "$WEBAPP_NAME" || { echo "::error::Set AZURE_WEBAPP_NAME in the azure-production environment."; exit 1; }
       - name: Install and verify
         run: |
           pip install -r requirements.txt
           python -m unittest discover -s tests -p 'test_*.py'
           node --test tests/*.test.mjs
-      - name: Build deployment archive
-        run: |
-          zip -q -r app.zip index.html styles.css theme.js app.mjs news-core.mjs i18n.mjs favicon.svg data/news.json scripts server.py gunicorn.conf.py requirements.txt -x '*/__pycache__/*'
       - uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      - uses: azure/webapps-deploy@v3
-        id: deploy
-        with:
-          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
-          package: app.zip
-      - name: Verify application startup
+      - name: Deploy and verify application startup
         env:
-          APP_URL: ${{ steps.deploy.outputs.webapp-url }}
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
         run: |
-          curl --fail --silent --show-error --retry 12 --retry-all-errors \
-            --retry-delay 10 --connect-timeout 10 --max-time 20 \
-            "${APP_URL%/}/healthz" --output health.json
-          python -c 'import json; assert json.load(open("health.json"))["status"] == "ok"'
-          curl --fail --silent --show-error --connect-timeout 10 --max-time 20 \
-            "${APP_URL%/}/" --output /dev/null
+          python -m scripts.deploy_azure deploy \
+            --resource-group "$RESOURCE_GROUP" --name "$WEBAPP_NAME"

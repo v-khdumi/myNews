@@ -6,7 +6,8 @@ from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
 from scripts.synthesize import (
-    completion_url, enrich_edition, fingerprint, generate, SynthesisError, validate_output,
+    completion_url, enrich_edition, fingerprint, generate, MAX_SUMMARY_CHARS,
+    MAX_SUMMARY_WORDS, SynthesisError, validate_output,
 )
 
 ENV = {
@@ -45,10 +46,26 @@ class SynthesisTests(unittest.TestCase):
     def test_structured_output_requires_both_languages_and_bounded_text(self):
         self.assertEqual(validate_output(copy.deepcopy(OUTPUT)), OUTPUT)
         for changes in ({"ro": None}, {"category": []}, {"category": "invented"}, {"en": {}},
-                        {"en": {"title": "T", "summary": "word " * 101}},
+                        {"en": {"title": "T", "summary": "word " * (MAX_SUMMARY_WORDS + 1)}},
+                        {"en": {"title": "T", "summary": "x" * (MAX_SUMMARY_CHARS + 1)}},
                         {"ro": {"title": "T", "summary": "<script>alert(1)</script>"}}):
             with self.subTest(changes=changes), self.assertRaises(SynthesisError):
                 validate_output({**copy.deepcopy(OUTPUT), **changes})
+
+    def test_extended_paragraphs_and_exact_upper_limits_are_accepted(self):
+        output = copy.deepcopy(OUTPUT)
+        output["ro"]["summary"] = "Detalii confirmate despre eveniment. " * 50
+        output["en"]["summary"] = "Reported facts.\n\n" + "word " * 298
+        self.assertEqual(validate_output(output), output)
+        output["en"]["summary"] = "x" * MAX_SUMMARY_CHARS
+        self.assertEqual(validate_output(output), output)
+
+    def test_prompt_change_invalidates_previously_short_cached_stories(self):
+        data = {"articles": [copy.deepcopy(ARTICLE)]}
+        with patch("scripts.synthesize.PROMPT_VERSION", "1"):
+            enrich_edition(data, ENV, fake_generate)
+        enrich_edition(data, ENV, fake_generate)
+        self.assertEqual(data["ai"]["processed_this_run"], 1)
 
     def test_request_has_grounded_input_json_mode_and_attribution(self):
         requests = []
@@ -67,6 +84,9 @@ class SynthesisTests(unittest.TestCase):
         payload = json.loads(requests[0].data)
         self.assertEqual(payload["response_format"], {"type": "json_object"})
         self.assertIn("untrusted", payload["messages"][0]["content"])
+        self.assertIn("160-240 words", payload["messages"][0]["content"])
+        self.assertIn("use a shorter brief if the source lacks detail", payload["messages"][0]["content"])
+        self.assertEqual(payload["max_completion_tokens"], 3200)
         self.assertEqual(json.loads(payload["messages"][1]["content"])["excerpt"], ARTICLE["excerpt"])
 
     def test_transport_refusal_and_truncated_results_are_explicit_errors(self):

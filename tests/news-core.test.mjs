@@ -173,3 +173,17 @@ test("invalid AI metadata cannot masquerade as an AI digest", () => {
   }
   assert.equal(relativeTime(article(3).published_at, now, "en"), "3 h ago");
 });
+
+test("longer bilingual stories remain available, with matching server limits", () => {
+  const entry = bilingual();
+  entry.synthesis.ro.summary = "Detalii despre eveniment. ".repeat(75).trim();
+  assert.ok(entry.synthesis.ro.summary.length > 1200);
+  assert.equal(articleText(entry).summary, entry.synthesis.ro.summary);
+  assert.equal(articleText(entry).ai, true);
+  entry.synthesis.ro.summary = "x".repeat(3600);
+  assert.equal(articleText(entry).ai, true);
+  entry.synthesis.ro.summary += "x";
+  assert.equal(articleText(entry).ai, false);
+  entry.synthesis.ro.summary = "cuvânt ".repeat(301);
+  assert.equal(articleText(entry).ai, false);
+});

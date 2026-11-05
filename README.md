@@ -7,9 +7,9 @@ Portal de știri **România + worldwide**, cu interfață editorială responsive
 ## Ce include
 
 - 12 surse configurate: HotNews, G4Media, Mediafax, Digi24, Descoperă, Biziday, Zona IT, Go4it, Știripesurse.ro, The Guardian, France 24 și Al Jazeera. „Local” înseamnă România în această versiune, nu selecție pe oraș.
-- Filtre combinate pe regiune, categorie, publicație, căutare fără diacritice, sortare și opțiunea „doar sinteze bilingve”.
-- Știre principală, carduri cu imagini RSS, flux „Pe radar”, cititor accesibil cu Escape și revenire la elementul care l-a deschis. Preferințele de temă și limbă se păstrează local.
-- Sinteze factuale RO/EN generate server-side prin **Azure AI Foundry / Azure OpenAI**, cu titlu, rezumat scurt, categorie, model, data generării și link la articolul original.
+- Filtre combinate pe regiune, categorie, publicație, căutare fără diacritice, sortare și opțiunea „doar ediții bilingve”.
+- Știre principală, carduri cu imagini RSS, flux „Pe radar”, cititor lat, adaptat ecranului, cu text de 18–20 px și paginare fără scroll când materialul nu încape integral. Butoanele și tastele săgeată stânga/dreapta sau Page Up/Down schimbă pagina; redimensionarea păstrează poziția în text. Escape închide cititorul și readuce focusul la știre. Preferințele de temă și limbă se păstrează local.
+- Ediții factuale RO/EN pregătite server-side prin **Azure AI Foundry / Azure OpenAI**, cu titlu, text dezvoltat în paragrafe, categorie și link la articolul original; modelul și data procesării se păstrează în proveniența tehnică, nu în cititor.
 - Mod RSS funcțional fără AI. Un extras în limba originală este etichetat ca atare: schimbarea limbii interfeței nu pretinde că a tradus un articol neprocesat.
 - Publicare statică pe GitHub Pages sau server Flask/Gunicorn pe **Azure Web App Linux**, cu stocare persistentă, actualizare periodică și endpoint-uri de sănătate.
 
@@ -76,9 +76,11 @@ gunicorn --config gunicorn.conf.py server:app
 | `NEWS_AUTO_UPDATE` | `1`; `0` dezactivează colectarea serverului |
 | `NEWS_DATA_PATH` | `/home/mynews/news.json` în Azure; `.cache/news.json` local |
 
-O singură cerere AI generează ambele limbi. Sunt trimise **numai titlul, extrasul RSS scurt, publicația și URL-ul**, niciodată textul integral. Extrasul este limitat la 45 de cuvinte / 280 de caractere; fără extras nu se generează un articol pornind doar de la titlu. Modelului i se cere să păstreze incertitudinile, să nu inventeze fapte și să ignore instrucțiunile din RSS.
+O singură cerere AI generează ambele limbi. Sunt trimise **numai titlul, extrasul RSS, publicația și URL-ul**, fără descărcarea articolului integral. Extrasul păstrează până la 300 de cuvinte / 2400 de caractere (plus semnul de trunchiere), pentru a nu pierde prematur detaliile disponibile. Fără extras nu se generează un articol pornind doar de la titlu. Sunt cerute 160–240 de cuvinte în 3–5 paragrafe per limbă atunci când informațiile sursei permit; un extras sărac produce deliberat un text mai scurt, nu detalii inventate sau repetate. Modelului i se cere să păstreze incertitudinile și să ignore instrucțiunile din RSS.
 
-Rezultatul este validat ca JSON cu ambele limbi, categorie permisă, titluri de maximum 180 de caractere și rezumate de maximum 100 de cuvinte / 1200 de caractere. Nu se acceptă un răspuns trunchiat sau filtrat. Sintezele sunt memorate cu amprenta intrării și versiunea promptului; se regenerează numai la modificarea intrării, promptului sau deployment-ului. Schimbarea deployment-ului invalidează sintezele anterioare până la regenerare.
+Rezultatul este validat ca JSON cu ambele limbi, categorie permisă, titluri de maximum 180 de caractere și texte de maximum 300 de cuvinte / 3600 de caractere. Bugetul răspunsului este de 3200 de tokenuri pentru ambele limbi, nu 1600; textele mai lungi pot crește costul per cerere. Nu se acceptă un răspuns trunchiat sau filtrat. Sintezele sunt memorate cu amprenta intrării și versiunea promptului; versiunea nouă invalidează textele scurte anterioare la următoarea colectare, în limita bugetului configurat. Schimbarea deployment-ului invalidează și ea sintezele anterioare.
+
+Interfața publică folosește etichetele „Știre”, „RO · EN” și „ediții bilingve”, fără nume de modele sau etichete de generare. Proveniența tehnică rămâne în datele serverului; publicația, data și linkul original rămân accesibile. Cititorul acordă prioritate textului: imaginea cu credit apare numai când lasă materialul să încapă pe o pagină; imaginile din carduri rămân disponibile. Pe ecrane mici, un text lung se citește în pagini care încap în ecran, fără micșorarea excesivă sau eliminarea conținutului. Numai dacă viewport-ul este prea mic pentru un singur caracter lizibil, cititorul permite scroll ca măsură de accesibilitate.
 
 Procesarea favorizează știrile cele mai noi și este limitată per rulare și la cinci minute pentru începerea cererilor AI (ultima cerere poate adăuga până la 45 de secunde); limita **nu garantează** procesarea întregului flux dacă ritmul de intrare o depășește. Restul articolelor rămân accesibile în limba originală, cu etichetă explicită. La prima eroare de transport/model procesarea AI se oprește pentru acea rulare, păstrează rezultatele deja reușite și raportează starea degradată; următoarea rulare reîncearcă. Configurația AI parțială sau invalidă oprește publicarea și păstrează ediția precedentă.
 
@@ -130,37 +132,37 @@ Acordă identității de deploy rolul **Website Contributor** pe Web App și set
 AZURE_CLIENT_ID
 AZURE_TENANT_ID
 AZURE_SUBSCRIPTION_ID
+AZURE_RESOURCE_GROUP
 AZURE_WEBAPP_NAME
 ```
 
-Rulează workflow-ul **Deploy Azure Web App** din Actions. Rulează testele, creează un pachet cu doar fișierele necesare și îl publică prin OIDC, fără publish profile în repository. App Service instalează `requirements.txt` prin Oryx și pornește Gunicorn. Workflow-ul verifică apoi `/healthz` și pagina principală; un serviciu care nu pornește nu mai este raportat ca deploy reușit.
+`AZURE_RESOURCE_GROUP` este grupul Web App-ului existent; configurează-l și dacă foloseai deja workflow-ul anterior.
+
+Rulează workflow-ul **Deploy Azure Web App** din Actions. Rulează testele, apoi folosește comanda de recuperare de mai jos prin OIDC, fără publish profile în repository: creează pachetul cu doar fișierele necesare, configurează construirea și startup-ul și publică efectiv aplicația. App Service instalează `requirements.txt` prin Oryx și pornește Gunicorn. Workflow-ul verifică apoi `/healthz` și pagina principală; un serviciu care nu pornește nu mai este raportat ca deploy reușit.
 
 Pentru publicare manuală, după configurarea infrastructurii:
 
 ```sh
-zip -r app.zip index.html styles.css theme.js app.mjs news-core.mjs i18n.mjs \
-  favicon.svg data/news.json scripts server.py gunicorn.conf.py requirements.txt \
-  -x '*/__pycache__/*'
-az webapp deploy --resource-group mynews-rg \
-  --name YOUR_GLOBALLY_UNIQUE_APP_NAME --src-path app.zip --type zip
+python -m scripts.deploy_azure deploy --resource-group mynews-rg \
+  --name YOUR_GLOBALLY_UNIQUE_APP_NAME
 ```
+
+Comanda necesită Python 3.12+, Azure CLI autentificat și `curl`. Folosește același pachet ca workflow-ul, activează construirea Oryx, elimină setarea `WEBSITE_RUN_FROM_PACKAGE` incompatibilă cu publicarea Python, reaplică startup-ul Gunicorn și așteaptă publicarea. Nu modifică setările AI sau datele din `/home/mynews`. Citește hostname-ul real din Azure și verifică `/healthz` și pagina principală; orice eroare oprește comanda. Pentru a crea numai arhiva, fără acces Azure: `python -m scripts.deploy_azure package --output app.zip`.
 
 ### Recuperarea unui deployment existent cu eroare 503
 
 Versiunea inițială a template-ului crea numai infrastructura, dar configura deja comanda `gunicorn --config gunicorn.conf.py server:app`. Fără publicarea codului, fișierele necesare pornirii lipseau și App Service putea răspunde cu **503 Service Unavailable**. Starea „Succeeded” a resurselor nu confirma că aplicația fusese instalată.
 
-Pentru resursele deja create, publică aplicația fără să recreezi planul sau Web App. În Azure Cloud Shell (Bash) sau Azure CLI autentificat, rulează cu grupul și numele aplicației existente:
+Mesajul `Error: 'gunicorn.conf.py' doesn't exist`, împreună cu lipsa manifestului Oryx și a mediului virtual, indică un deployment lipsă sau incomplet, nu o eroare de sintaxă în configurația Gunicorn din repository. Nu elimina `--config`: configurația pornește și colectorul RSS.
+
+Pentru resursele deja create, publică efectiv fișierele fără să recreezi planul sau Web App. Din rădăcina unui checkout actualizat al repository-ului, în Azure Cloud Shell (Bash) sau Azure CLI autentificat, rulează cu grupul și numele aplicației existente:
 
 ```sh
-az webapp deployment source config \
-  --resource-group YOUR_EXISTING_RESOURCE_GROUP \
-  --name YOUR_EXISTING_APP_NAME \
-  --repo-url https://github.com/v-khdumi/myNews \
-  --branch main --manual-integration
-curl --fail https://YOUR_EXISTING_APP_NAME.azurewebsites.net/healthz
+python -m scripts.deploy_azure deploy \
+  --resource-group YOUR_EXISTING_RESOURCE_GROUP --name YOUR_EXISTING_APP_NAME
 ```
 
-Așteaptă finalizarea construirii în **Deployment Center → Logs** înainte de verificarea HTTP. Alternativ, reaplică template-ul actualizat cu același `appName` și aceleași setări AI securizate, sau publică pachetul prin workflow-ul de mai sus. Dacă 503 persistă după publicarea codului, verifică **Log stream** pentru eroarea exactă Gunicorn/Oryx; `/readyz` poate răspunde separat cu 503 până există o ediție recentă și nu este endpoint-ul de liveness.
+Comanda poate dura câteva minute. Dacă eșuează, verifică **Deployment Center → Logs** pentru etapa de publicare/construire și **Log stream** pentru eroarea exactă Gunicorn/Oryx. Alternativ, folosește **Deployment Center → Sync** dacă integrarea Git este deja configurată, reaplică template-ul actualizat cu același `appName` și aceleași setări AI securizate, sau publică pachetul prin workflow-ul de mai sus. `/readyz` poate răspunde separat cu 503 până există o ediție recentă și nu este endpoint-ul de liveness. Avertismentul TCP despre intervalul de timp se rezolvă separat, selectând o perioadă mai mare de 20 de minute; nu provoacă eroarea de startup.
 
 ### 3. Operare
 

@@ -181,13 +181,20 @@ class PreviewTests(unittest.TestCase):
         ), "Primul & text Al doilea")
 
     def test_excerpt_is_bounded_and_cache_reprocessing_is_stable(self):
-        for text in ("cuvânt " * 100, "cuvânt-lung " * 100, "x" * 400):
+        for text in ("cuvânt " * 400, "cuvânt-lung " * 400, "x" * 2500):
             with self.subTest(text=text[:20]):
                 result = short_excerpt(text)
-                self.assertLessEqual(len(result), 281)
-                self.assertLessEqual(len(result.split()), 45)
+                self.assertLessEqual(len(result), 2401)
+                self.assertLessEqual(len(result.split()), 300)
                 self.assertTrue(result.endswith("…"))
                 self.assertEqual(short_excerpt(result), result)
+
+    def test_longer_rss_detail_is_not_cut_to_the_old_card_preview_limit(self):
+        text = "Detalii factuale din fluxul publicației. " * 30
+        result = short_excerpt(text)
+        self.assertGreater(len(result), 280)
+        self.assertGreater(len(result.split()), 100)
+        self.assertEqual(result, text.strip())
 
     def test_image_url_validation_and_cdn_support(self):
         for value in ("javascript:alert(1)", "data:image/svg+xml,test", "http://cdn.example.com/a",
